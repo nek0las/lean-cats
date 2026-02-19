@@ -4,8 +4,6 @@ import LeanCats.Relations
 import LeanCats.Data
 import LeanCats.Basic
 
-set_option quotPrecheck false
-
 open Lean Elab Command Term Meta
 open Data
 
@@ -21,20 +19,22 @@ syntax "[reserved|" reserved "]" : term
 syntax "[predefined-relations|" predefined_relations "]" : term
 syntax "[dsl-term|" dsl_term "]" : term
 
+-- Walk any cat_ident syntax tree, collect all ident leaves, and join with "_".
+-- This handles plain idents, tick-prefixed ('ONCE), and multi-hyphen (rcu-lock, after-unlock-lock).
+partial def catIdentToName (stx : Syntax) : Name :=
+  let rec go (s : Syntax) : Array String :=
+    if s.isIdent then #[s.getId.toString]
+    else if s.isAtom then #[]  -- skip punctuation atoms like "'" and "-"
+    else s.getArgs.foldl (fun acc a => acc ++ go a) #[]
+  let parts := go stx
+  match parts with
+  | #[] => `_unknown
+  | _   =>
+    let joined := parts[1:].foldl (fun acc s => acc ++ "_" ++ s) parts[0]!
+    joined.toName
+
 instance : Coe (TSyntax `cat_ident) (TSyntax `ident) where
-  -- Urgly hack.
-  coe s :=
-  if s.raw.getKind.getString! == "cat_ident_" then
-    ⟨s.raw.getArg 0⟩
-  else if s.raw.getKind.getString! == "cat_ident__-__" then
-    let l : TSyntax `ident := ⟨s.raw.getArg 0⟩
-    let r : TSyntax `ident := ⟨s.raw.getArg 2⟩
-    mkIdent (l.getId.toString ++ "_" ++ r.getId.toString).toName
-  else if s.raw.getKind.getString! == "cat_ident'_" then
-    panic! "Have to implement this"
-  else
-    dbg_trace s.raw.getKind.getString!
-    panic! "Failed to converse the cat_ident to ident"
+  coe s := mkIdent (catIdentToName s.raw)
 
 macro_rules
   | `([expr| $e₁:expr | $e₂:expr]) =>
@@ -111,7 +111,6 @@ macro_rules
   | `([keyword| from]) => Lean.Macro.throwUnsupported
   | `([keyword| fun]) => Lean.Macro.throwUnsupported
   | `([keyword| in]) => Lean.Macro.throwUnsupported
-  | `([keyword| instructions]) => Lean.Macro.throwUnsupported
   | `([keyword| let]) => Lean.Macro.throwUnsupported
   | `([keyword| match]) => Lean.Macro.throwUnsupported
   | `([keyword| procedure]) => Lean.Macro.throwUnsupported
@@ -134,6 +133,7 @@ macro_rules
       => X.evts.R)
   | `([annotable-events| B]) => `(fun X : CandidateExecution => X.evts.B)
   | `([annotable-events| F]) => `(fun X : CandidateExecution => X.evts.F)
+  | `([annotable-events| RMW]) => `(fun X : CandidateExecution => X.evts.RMW)
 
 macro_rules
   -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
@@ -147,7 +147,6 @@ macro_rules
 
   | `([predefined-events| $a:annotable_events]) => `([annotable-events| $a])
 
-
 macro_rules
   -- We just ignore the include inst.
   | `([inst| include $_filename:str]) => return mkNullNode
@@ -160,15 +159,37 @@ macro_rules
     `(@[simp] def $nm (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) : Prop
       := [assertion| $a] ([expr| $e] evts X))
 
-  | `([inst| enum $nm:cat_ident = $[ $tags:ident ]||*]) => do
+  | `([inst| ~$a:assertion $e as $nm:cat_ident]) => do
+    `(@[simp] def $nm (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) : Prop
+      := ¬[assertion| $a] ([expr| $e] evts X))
+
+  | `([inst| enum $nm:cat_ident = $[ $tags:cat_ident ]||*]) => do
+    let nmIdent : TSyntax `ident := nm
+    -- Convert each cat_ident tag to a plain Lean ident (handles multi-hyphen names like rcu-lock → rcu_lock).
+    let tagIdents : Array (TSyntax `ident) := tags.map (fun t => mkIdent (catIdentToName t.raw))
     let indef <- `(
-      -- tags should be cat_ident, but it seems like the Lean 4 doesn't happy with it.
-      inductive $nm where $[| $tags:ident ]*
+      inductive $nmIdent where $[| $tagIdents:ident ]*
     )
-    -- We create the tags and mapping all the fields, because the fields are unique.
-    -- If they're not unique, the herd7 can't use them apprently.
-    let ret := #[indef] ++ #[<-`(open scoped $nm)]
+    -- Derive DecidableEq so we can state and decide `e.tag = Accesses.ONCE` in proofs.
+    let decEq <- `(deriving instance DecidableEq for $nmIdent)
+    -- Register as a Tag type so the vm knows this is used for event tagging.
+    let tagName := mkIdent `Data.Tag
+    let tagInst <- `(instance : $tagName $nmIdent where)
+    -- Create unqualified aliases, e.g. `ONCE` → `Accesses.ONCE`.
+    let aliases <- tagIdents.mapM fun (tagId : TSyntax `ident) => do
+      let qualName := mkIdent (nmIdent.getId ++ tagId.getId)
+      `(def $tagId := $qualName)
+    let ret := #[indef, decEq, tagInst] ++ aliases
     return mkNullNode ret
+
+  | `([inst| flag $_:assertion $_:expr as $_:expr]) => do
+    -- We ignore the flag for now, since it doesn't change the states of the execution, it's just used to witness the assertion.
+    return mkNullNode #[]
+
+  | `([inst| instructions $_a:annotable_events [ $_c:cat_ident ]]) => do
+    -- TODO(Nikolas): Add instructions support for this.
+    -- By now the instructions are ignored because we don't make sure the semantics of the instrutions.
+    return mkNullNode #[]
 
 macro_rules
   -- Create the model.
@@ -181,14 +202,54 @@ macro_rules
     let ret := #[nstart] ++ insts ++ #[nend]
     return mkNullNode ret
 
-[inst| enum barrier = t1]
-open scoped barrier
+-- Linux-kernel memory consistency model  ("linux.bell" excerpt)
+-- Comments (*...*) and tick-prefixes (') are stripped by the preprocessor
+-- before these lines reach the Lean syntax; we write the cleaned form here.
+[inst| enum Accesses = ONCE || RELEASE || ACQUIRE || NORETURN || MB]
 
-scoped[barrier] notation "t1" => barrier.t1
-open scoped barrier
-#check t1
+[inst| enum Barriers =
+    wmb || rmb || barrier || rcu_read_lock || rcu_read_unlock ||
+    rcu_lock || rcu_unlock || sync_rcu ||
+    before_atomic || after_atomic ||
+    after_spinlock || after_unlock_lock ||
+    after_srcu_read_unlock
+]
 
-def test_event (e : Event) (h : e.tagType = barrier) (c : e.tag = barrier.t1) :=
-  e.tagType = barrier ∧ e.tag = cast h.symm t1
+-- Spot-check generated names
+#check Accesses.ONCE
+#check Accesses.RELEASE
+#check Barriers.rcu_lock
+#check Barriers.after_unlock_lock
 
-#check barrier.t1
+[model| linux
+
+enum Accesses = ONCE  ||
+  RELEASE  ||
+  ACQUIRE  ||
+  NORETURN  ||
+  MB
+instructions R[Accesses]
+instructions W[Accesses]
+instructions RMW[Accesses]
+
+enum Barriers = wmb  ||
+  rmb  ||
+  MB  ||
+  barrier  ||
+  rcu-lock   ||
+  rcu-unlock  ||
+  sync-rcu  ||
+  before-atomic  ||
+  after-atomic  ||
+  after-spinlock  ||
+  after-unlock-lock  ||
+  after-srcu-read-unlock
+instructions F[Barriers]
+
+
+let FailedRMW = RMW \ (domain(rmw) | range(rmw))
+let Acquire = ACQUIRE \ W \ FailedRMW
+let Release = RELEASE \ R \ FailedRMW
+let Mb = MB \ FailedRMW
+let Noreturn = NORETURN \ W]
+-- Check the instruction sets

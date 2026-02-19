@@ -60,7 +60,7 @@ private def processHead (accDone : String × Bool)  : Char → String × Bool :=
 
 def removeFrontTick (input : String) : String :=
   (input.splitOn.map (fun s => s.stripPrefix "\'")) |> (String.intercalate " ")
-  |>.splitOn "\n" |>.map (fun s => s.stripPrefix "\'") |> (String.intercalate " ")
+  |>.splitOn "\n" |>.map (fun s => s.stripPrefix "\'") |> (String.intercalate "\n")
   |>.splitOn "\t" |>.map (fun s => s.stripPrefix "\'") |> (String.intercalate " ")
 
 def removeComments (input : String) : String :=

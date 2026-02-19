@@ -35,7 +35,6 @@ syntax "forall" : keyword
 syntax "from" : keyword
 syntax "fun" : keyword
 syntax "in" : keyword
-syntax "instructions" : keyword
 syntax "let" : keyword
 syntax "match" : keyword
 syntax "procedure" : keyword
@@ -52,6 +51,7 @@ syntax assertion : keyword
 syntax "irreflexive" : assertion
 syntax "empty" : assertion
 syntax "acyclic" : assertion
+syntax "~"assertion : assertion
 
 syntax "_" : name
 syntax "O" : name
@@ -67,6 +67,7 @@ syntax "W" : annotable_events -- write events
 syntax "R" : annotable_events -- read events
 syntax "B" : annotable_events -- branch events
 syntax "F" : annotable_events -- fence events
+syntax "RMW" : annotable_events -- read-modify-write events
 
 syntax "___" : predefined_events -- all events
 syntax "IW" : predefined_events -- initial writes
@@ -91,13 +92,14 @@ syntax "(" expr ")" : dsl_term
 syntax cat_ident : dsl_term
 
 syntax ident : cat_ident
-syntax ident"-"ident : cat_ident
+syntax ident ("-" ident)+ : cat_ident
 
 syntax dsl_term:51 : expr
 
 syntax:51 expr:51 "|" expr:50 : expr
 syntax expr "&" expr : expr
 syntax expr ";" expr : expr
+syntax expr "\\" expr : expr
 syntax:60 expr:60 "*" expr:61 : expr
 syntax expr "^" expr : expr
 syntax expr "+" expr : expr
@@ -105,8 +107,14 @@ syntax expr "-" expr : expr
 syntax:71 expr "^-1" : expr
 
 syntax assertion expr ("as" cat_ident)? : inst
+-- The flag is used to witness the assertion, so it doesn't change the states of the execution, we could just ignore it.
+syntax "flag" assertion expr "as" expr : inst
 syntax "let" cat_ident "=" expr : inst
 syntax "enum" cat_ident "=" sepBy(cat_ident, "||")  : inst
+
+syntax "enum" cat_ident "=" sepBy(cat_ident, "||") : inst
+-- event class can be R W F B RMW or a custom name like SRCU
+syntax "instructions" annotable_events "[" cat_ident "]" : inst
 
 syntax "(*" ident* "*)" : inst
 syntax "include" str : inst

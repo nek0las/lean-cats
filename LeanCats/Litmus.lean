@@ -1,0 +1,1 @@
+-- In this file, we define a serias of instructions to prove if it's allowed or not regarding to a specific model.

@@ -15,6 +15,8 @@ instance instUnionRelEvents : Union (Event → Event → Prop) := ⟨union⟩
 instance : Union (Rel Event Event) := instUnionRelEvents
 instance : Inter (Rel Event Event) := ⟨inter⟩
 
+@[simp] def domain (r : Rel Event Event) : Set Event := λ e ↦ ∃ e', r e e'
+
 @[simp] def R : Set Event :=
   λ e ↦ e.effect.op = Op.read
 
@@ -145,6 +147,7 @@ structure co.wellformed
   (e1 e2 : Event)
   : Prop :=
   ∃w, isWrite w ∧ rf evts w e1 ∧ co.wellformed evts w e2
+
 
 def com
   (evts : Events)

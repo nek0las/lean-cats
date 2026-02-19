@@ -56,19 +56,6 @@ structure Events where
   (Branch : Set Event)
   (Fence : Set Event)
   (RMW : Set Event)
-  (M : Set Event)
-
-  -- Assumptions
-  (uniqueId : ∀e₁ e₂ : Event, e₁ = e₂ ↔ e₁.id = e₂.id)
-  (writeEqOrNotEq : ∀w₁ w₂ : Write, w₁ = w₂ ∨ w₁ ≠ w₂)
-  (readEqOrNotEq : ∀r₁ r₂ : Read, r₁ = r₂ ∨ r₁ ≠ r₂)
-  (fenceEqOrNotEq : ∀f₁ f₂ : Fence, f₁ = f₂ ∨ f₁ ≠ f₂)
-  (readDef : ∀ r ∈ Read, r.effect.op = Op.read)
-  (writeDef : ∀ w ∈ Write, w.effect.op = Op.write)
-  (mDef : ∀ m ∈ M, m.effect.op = Op.read ∨ m.effect.op = Op.write)
-  (mFence : ∀ f ∈ Fence, f.effect.op = Op.fence)
-  (mBranch : ∀ b ∈ Branch, b.effect.op = Op.branch)
-  (allIn : Acquire ∪ Release ∪ IW ∪ Read ∪ Write ∪ Branch ∪ Fence ∪ RMW ∪ M ⊆ all)
 
 instance : Membership Event Events where
   mem evts evt := evt ∈ evts.all
@@ -82,11 +69,9 @@ What we want is a:
   enum B = 'z | 'a
   etc
 
--- By default it's Event, every time we use it, we should use (Tag Event) to know it's an event tag.
-class Tag (t : Type) where.
-
 -/
 
--- instructions W [Tag]
+-- By default it's Event, every time we use it, we should use (Tag Event) to know it's an event tag.
+class Tag (t : Type) where
 
 end Data
