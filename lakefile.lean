@@ -17,4 +17,4 @@ lean_exe "test-to-string" where
 require "leanprover-community" / "mathlib"
 
 -- You should replace v0.0.3 with the latest version published under Releases
-require proofwidgets from git "https://github.com/leanprover-community/ProofWidgets4"@"main"
+require proofwidgets from git "https://github.com/leanprover-community/ProofWidgets4"@"v0.0.90"
