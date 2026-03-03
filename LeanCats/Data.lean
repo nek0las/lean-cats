@@ -2,10 +2,6 @@ import Mathlib.Data.Rel
 
 namespace Data
 
-inductive Thread : Type where
-  | mk: Nat -> Thread
-deriving Inhabited, BEq, Repr, DecidableEq
-
 inductive Op : Type where
   | write : Op
   | read : Op
@@ -13,25 +9,32 @@ inductive Op : Type where
   | branch : Op
 deriving Inhabited, BEq, Repr, DecidableEq
 
-abbrev Location := String
-
 structure Effect : Type where
   op : Op
-  location : Location
+  location : Nat
   -- For read, the value can not be determined at the begining.
-  value : Option Nat
+  value : Nat
   isFirstWrite : Bool
   isFinalWrite : Bool
 deriving Inhabited, BEq, Repr, DecidableEq
 
-class Tag (t : Type) where
-
 structure Event where
-  (id : Nat)   -- Unique identifier, consistent with program order for a given thread
-  (t_id : Nat)      -- Thread ID
-  (t : Thread)    -- Associated thread
-  (effect : Effect) -- Action performed
-  [tag {tagType} [Tag tagType] : tagType]
+  id : Nat   -- Unique identifier, consistent with program order for a given thread
+  t_id : Nat      -- Thread ID
+  effect : Effect -- Action performed
+  tag : Σ tagType : Type, tagType
+
+instance : BEq Event where
+  beq e1 e2 := e1.id == e2.id
+
+inductive Normal where
+| none : Normal
+
+def rOp1 : Data.Effect := { op := Data.Op.write, location := 1, value := 0, isFinalWrite := false, isFirstWrite := false }
+def rOp2 : Data.Effect := { op := Data.Op.read, location := 2, value := 1, isFinalWrite := false, isFirstWrite := false }
+
+def R1 : Data.Event := { id := 1, t_id := 0, effect := rOp1, tag := ⟨Normal, Normal.none⟩ }
+def R2 : Data.Event := { id := 1, t_id := 0, effect := rOp1, tag := ⟨Normal, Normal.none⟩ }
 
 @[simp] def reads : Set Event :=
   λ e ↦ e.effect.op = Op.read
@@ -48,18 +51,32 @@ structure Event where
 -- branch events, gathered in the set B;
 -- fences, gathered in the set F.
 structure Events where
-  (all : Set Event)
-  (Acquire : Set Event)
-  (Release : Set Event)
   (IW : Set Event)
   (R : Set Event)
   (W : Set Event)
   (B : Set Event)
   (F : Set Event)
   (RMW : Set Event)
+  (SRCU : Set Event)
+  (M : Set Event)
+
+def Events.all (evts : Events) :=
+  evts.IW ∪ evts.R ∪ evts.W ∪ evts.B ∪ evts.F ∪ evts.RMW ∪ evts.SRCU ∪ evts.M
 
 instance : Membership Event Events where
-  mem evts evt := evt ∈ evts.all
+  mem := fun es e => e ∈ es.all
+
+-- We can derive some relations based on the events.
+@[simp] def Events.rf (evts : Events) : SetRel Event Event :=
+  λ (w, r) =>
+    w ∈ evts.W ∧ r ∈ evts.R
+    ∧ w.effect.location = r.effect.location
+    ∧ r.effect.value = w.effect.value
+    ∧ r.id ≠ w.id
+
+@[simp] def Events.po (evts : Events) : SetRel Event Event :=
+  λ (a, b) =>
+    a.t_id = b.t_id ∧ a.id < b.id
 
 /-
 In the definition of the cat specification, we know that the tag is just an id.

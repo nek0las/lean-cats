@@ -45,6 +45,12 @@ instance : Coe (TSyntax `ident) (TSyntax `cat_ident) where
 instance : Coe (TSyntax `ident) (TSyntax `annotable_events) where
   coe s := mkNode `annotable_events #[s]
 
+#check Set Event
+
+-- Set α -> Set (α × α)
+def SetRel.mkId (s : Set Event) : SetRel Event Event :=
+  fun (e₁, e₂) => e₁ = e₂ ∧ e₁ ∈ s
+
 macro_rules
   | `([expr| $e₁:expr | $e₂:expr, $evts, $X]) =>
     `(Set.union ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
@@ -53,10 +59,16 @@ macro_rules
     `(CatRel.inter ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
 
   | `([expr| $e₁:expr ; $e₂:expr, $evts, $X]) =>
-    `(Rel.comp ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
+    `(SetRel.comp ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
+
+  | `([expr| [ $i:expr ], $evts, $X ]) =>
+    `(SetRel.mkId `([expr| $i, $evts, $X]) )
 
   | `([expr| $e₁:expr * $e₂:expr, $evts, $X]) =>
     `(CatRel.prod ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
+
+  | `([expr| ~ $e:expr, $evts, $X]) =>
+    `(Set.compl ([expr| $e, $evts, $X]))
 
   | `([expr| $e₁:expr \ $e₂:expr, $evts, $X]) =>
     `(Set.diff ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
@@ -197,10 +209,13 @@ macro_rules
   | `([annotable-events| RMW, $evts, $X]) =>
     let nm := mkIdent "RMW".toName
     `(($X.$evts.$nm : Set Event))
+  | `([annotable-events| SRCU, $evts, $X]) =>
+    let nm := mkIdent "SRCU".toName
+    `(($X.$evts.$nm : Set Event))
 
 namespace TestAnnotableEvents
-variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts)
-def a := [annotable-events| R, evts, X]
+variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (x : CandidateExecution evts)
+def a := [annotable-events| R, evts, x]
 #reduce a
 end TestAnnotableEvents
 
@@ -218,8 +233,9 @@ macro_rules
     `([annotable-events| $a, $evts, $X])
 
 namespace TestPredefinedEvents
-variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts)
-def a := [predefined-events| R, evts, X]
+variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (x : CandidateExecution evts)
+def a := [predefined-events| R, evts, x]
+
 #reduce a
 end TestPredefinedEvents
 
@@ -228,7 +244,7 @@ macro_rules
   | `([inst| include $_filename:str , $_ , $_]) => return mkNullNode
 
   | `([inst| let $nm:cat_ident = $e, $evts, $X]) =>
-    `(@[simp] def $nm := [expr|$e, $evts, $X])
+    `(abbrev $nm := [expr|$e, $evts, $X])
 
   | `([inst| $a:assertion $e as $_:cat_ident, $evts, $X]) => do
     `([assertion| $a] ([expr| $e, $evts, $X]))
@@ -244,21 +260,29 @@ macro_rules
     let indef <- `(
       inductive $nmIdent where $[| $tagIdents:ident ]*
     )
-    -- Derive DecidableEq so we can state and decide `e.tag = Accesses.ONCE` in proofs.
-    let decEq <- `(deriving instance DecidableEq for $nmIdent)
-    -- Register as a Tag type so the vm knows this is used for event tagging.
-    let tagName := mkIdent `Data.Tag
-    let tagInst <- `(instance : $tagName $nmIdent where)
     -- Create unqualified aliases, e.g. `ONCE` → `Accesses.ONCE`.
     let aliases <- tagIdents.mapM fun (tagId : TSyntax `ident) => do
       let qualName := mkIdent (nmIdent.getId ++ tagId.getId)
       `(def $tagId := $qualName)
-    let ret := #[indef, decEq, tagInst] ++ aliases
+    let ret := #[indef] ++ aliases
     return mkNullNode ret
 
   | `([inst| flag $_:assertion $_:expr as $_:expr, $_, $_]) => do
     -- We ignore the flag for now, since it doesn't change the states of the execution, it's just used to witness the assertion.
     return mkNullNode #[]
+
+-- namespace LKMM
+-- [inst| let rcu-fn =
+--   unmatched-locks = Rcu-lock \ domain(matched)
+--   and unmatched-unlocks = Rcu-unlock \ range(matched)
+--   and unmatched = unmatched-locks | unmatched-unlocks
+--   and unmatched-po = [unmatched]; po; [unmatched]
+--   and unmatched-locks-to-unlocks =
+--   [unmatched-locks]; po; [unmatched-unlocks]
+--   and matched = matched | (unmatched-locks-to-unlocks \
+--   (unmatched-po; unmatched-po))]
+--
+-- end LKMM
 
 /--
 Processes `instructions A[EnumType]` by generating a definition for each constructor of `EnumType`.
@@ -275,6 +299,7 @@ we generate:
 def elabCatInst : CommandElab := fun stx => do
   match stx with
   | `([inst| instructions $a:annotable_events [ $c:cat_ident ] , $evts:cat_ident , $X:cat_ident]) => do
+    dbg_trace "entering elabCatInst"
     let currNamespace <- getCurrNamespace
     -- This is used to get the full name with namespace.
     let typeName := Name.updatePrefix c.getId currNamespace
@@ -293,7 +318,7 @@ def elabCatInst : CommandElab := fun stx => do
           let ctorDef <-
           `(
             abbrev $(mkIdent ctorName) :
-              Set Event := {e | e.tag = $(mkIdent ctor) } ∩ ([annotable-events| $a, $evts, $X])
+              Set Event := {e | e.tag = ⟨$(mkIdent typeName), $(mkIdent ctor)⟩ } ∩ ([annotable-events| $a, $evts, $X])
           )
           return ctorDef
         )
@@ -303,13 +328,13 @@ def elabCatInst : CommandElab := fun stx => do
 
 macro_rules
   -- Create the model.
-  | `([model| $n:ident $x:inst*]) => do
+  | `([model| $n:ident $xs:inst*]) => do
     let nstart <- `(namespace $n)
     let evts := mkIdent `evts
-    let X := mkIdent `X
+    let X := mkIdent `x
     let vars <- `(variable ($evts : Events) [IsStrictTotalOrder Event (CatRel.preCo $evts)] ($X : CandidateExecution $evts))
     let nend <- `(end $n)
-    let insts <- x.mapM (fun ins => `([inst| $ins, $evts, $X]))
+    let insts <- xs.mapM (fun ins => `([inst| $ins, $evts, $X]))
 
     -- let insts : Array (TSyntax `command) := #[]
     let ret := #[nstart] ++ #[vars] ++ insts ++ #[nend]
@@ -318,20 +343,6 @@ macro_rules
 -- Linux-kernel memory consistency model  ("linux.bell" excerpt)
 -- Comments (*...*) and tick-prefixes (') are stripped by the preprocessor
 -- before these lines reach the Lean syntax; we write the cleaned form here.
-
-namespace TestInstructions
-variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts)
-[inst| enum Accesses = ONCE || RELEASE || ACQUIRE || NORETURN || MB, evts, X]
-#check Accesses
-[inst| instructions R[Accesses] , evts, X]
-
-[inst| let a = rmw, evts, X]
-
-#reduce ONCE
-end TestInstructions
-
-#reduce TestInstructions.ONCE
-
 [model| t
   enum Barriers =
     wmb || rmb || barrier || rcu_read_lock || rcu_read_unlock ||
@@ -339,7 +350,15 @@ end TestInstructions
     before_atomic || after_atomic ||
     after_spinlock || after_unlock_lock ||
     after_srcu_read_unlock
+
+  instructions F[Barriers]
 ]
+
+#check t.Barriers.after_atomic'
+#reduce t.after_atomic
+
+-- The tag name will be capilized automatically.
+-- https://github.com/herd/herdtools7/blob/2ad8eadf3246b66c4e03248d80bde8a11b7d00fb/lib/BellName.ml#L31
 
 -- Spot-check generated names
 -- This tags used as the event tags, we don't refer them directly.
@@ -349,6 +368,10 @@ end TestInstructions
 abbrev domain (r : SetRel Event Event) := SetRel.dom r
 
 abbrev range (r : SetRel Event Event) := SetRel.cod r
+
+[model| test
+  let acq = [M]
+]
 
 namespace LinuxTest
 [model| linux
@@ -373,8 +396,22 @@ enum Barriers = wmb  ||
   after-srcu-read-unlock
 instructions F[Barriers]
 
-let a = rmw
+let FailedRMW = RMW \ (domain(rmw) | range(rmw))
+let Acquire = ACQUIRE \ W \ FailedRMW
+let Release = RELEASE \ R \ FailedRMW
+let Mb = MB \ FailedRMW
+let Noreturn = NORETURN \ W
+
+enum srcu = Srcu_lock || Srcu_unlock || Sync_srcu
+instructions SRCU[srcu]
+let Srcu = Srcu_lock | Srcu_unlock | Sync_srcu
+
+let Marked = (~M) | IW | ONCE | RELEASE | ACQUIRE | MB | RMW | Srcu-lock | Srcu-unlock
+let Plain = M \ Marked
+
 ]
+
+#reduce linux.Plain
 
 -- Check the instruction sets
 end LinuxTest
