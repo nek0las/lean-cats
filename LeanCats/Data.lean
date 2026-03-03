@@ -13,7 +13,7 @@ structure Effect : Type where
   op : Op
   location : Nat
   -- For read, the value can not be determined at the begining.
-  value : Nat
+  value : Option Nat
   isFirstWrite : Bool
   isFinalWrite : Bool
 deriving Inhabited, BEq, Repr, DecidableEq
@@ -29,12 +29,6 @@ instance : BEq Event where
 
 inductive Normal where
 | none : Normal
-
-def rOp1 : Data.Effect := { op := Data.Op.write, location := 1, value := 0, isFinalWrite := false, isFirstWrite := false }
-def rOp2 : Data.Effect := { op := Data.Op.read, location := 2, value := 1, isFinalWrite := false, isFirstWrite := false }
-
-def R1 : Data.Event := { id := 1, t_id := 0, effect := rOp1, tag := ⟨Normal, Normal.none⟩ }
-def R2 : Data.Event := { id := 1, t_id := 0, effect := rOp1, tag := ⟨Normal, Normal.none⟩ }
 
 @[simp] def reads : Set Event :=
   λ e ↦ e.effect.op = Op.read
@@ -76,7 +70,7 @@ instance : Membership Event Events where
 
 @[simp] def Events.po (evts : Events) : SetRel Event Event :=
   λ (a, b) =>
-    a.t_id = b.t_id ∧ a.id < b.id
+    a ∈ evts ∧ b ∈ evts ∧ a.t_id = b.t_id ∧ a.id < b.id
 
 /-
 In the definition of the cat specification, we know that the tag is just an id.
