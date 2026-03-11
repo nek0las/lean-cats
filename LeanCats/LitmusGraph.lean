@@ -241,6 +241,181 @@ def toHtml (exec : ConcreteExecution) : Html :=
   toHtmlAux data.1 data.2
 
 -- ════════════════════════════════════════════════════════════════
+-- § Ordered (Column) Layout Renderer
+-- ════════════════════════════════════════════════════════════════
+
+/-! The ordered renderer places events in a grid:
+
+* **Columns** = one per thread, with the IW (initial-write) thread first.
+* **Rows**    = events within a thread, top-to-bottom in program order (by event id).
+
+Relation edges are drawn as SVG paths between the fixed node positions.
+`po` edges are straight vertical arrows within a column;
+cross-column edges (`rf`, `co`, `fr`, `rmw`) use quadratic Bézier curves.
+-/
+
+/-- Layout configuration for the ordered graph. -/
+structure LayoutCfg where
+  colSpacing : Float := 180
+  rowSpacing : Float := 70
+  marginX    : Float := 80
+  marginY    : Float := 60
+  nodeW      : Float := 110
+  nodeH      : Float := 28
+deriving Inhabited
+
+/-- Helper: build a string-valued SVG attribute pair. -/
+private def sa (k v : String) : String × Lean.Json := (k, Lean.Json.str v)
+/-- Helper: build a numeric SVG attribute pair (float → string). -/
+private def sn (k : String) (v : Float) : String × Lean.Json := (k, Lean.Json.str (toString v))
+
+/-- Build the ordered-layout SVG for a `ConcreteExecution`.
+Returns a self-contained `<svg>` `Html` element. -/
+def executionToOrderedSvg (exec : ConcreteExecution) (cfg : LayoutCfg := {}) : Html := Id.run do
+  -- ── 1. Group threads, IW first ─────────────────────────────
+  let initTid := exec.events.foldl
+    (fun acc e => if e.effect.isFirstWrite then e.t_id else acc) 0
+  let allTids := ((exec.events.map (·.t_id)).toList).eraseDups
+  let sortedTids :=
+    allTids.filter (· == initTid) ++
+    (allTids.filter (· != initTid)).mergeSort (· < ·)
+
+  -- ── 2. Position map: event id → (cx, cy) ──────────────────
+  let mut posMap : Std.HashMap Nat (Float × Float) := {}
+  let mut colIdx : Nat := 0
+  let mut maxRows : Nat := 0
+  for tid in sortedTids do
+    let threadEvts := exec.events.filter (·.t_id == tid)
+    let sorted := threadEvts.qsort (fun a b => a.id < b.id)
+    let cx := cfg.marginX + cfg.colSpacing * colIdx.toFloat
+    for rowIdx in [:sorted.size] do
+      let cy := cfg.marginY + cfg.rowSpacing * rowIdx.toFloat
+      posMap := posMap.insert sorted[rowIdx]!.id (cx, cy)
+    maxRows := max maxRows sorted.size
+    colIdx := colIdx + 1
+  let numCols := colIdx
+
+  -- ── 3. Canvas size ─────────────────────────────────────────
+  let svgW := cfg.marginX * 2 + cfg.colSpacing * (numCols.toFloat - 1) + cfg.nodeW
+  let svgH := cfg.marginY + cfg.rowSpacing * (maxRows.toFloat - 1) + cfg.nodeH + 40
+
+  -- ── 4. Defs: colored arrowhead markers ─────────────────────
+  let mkArrow (id color : String) := Html.element "marker"
+    #[sa "id" id,
+      sa "markerWidth" "10", sa "markerHeight" "7",
+      sa "refX" "10", sa "refY" "3.5",
+      sa "orient" "auto"]
+    #[Html.element "polygon"
+        #[sa "points" "0 0, 10 3.5, 0 7", sa "fill" color] #[]]
+  let defs := Html.element "defs" #[]
+    #[mkArrow "arrow-po"  "cornflowerblue",
+      mkArrow "arrow-rf"  "seagreen",
+      mkArrow "arrow-co"  "tomato",
+      mkArrow "arrow-fr"  "orange",
+      mkArrow "arrow-rmw" "purple"]
+
+  -- ── 5. Column headers ──────────────────────────────────────
+  let mut headers : Array Html := #[]
+  let mut ci : Nat := 0
+  for tid in sortedTids do
+    let cx := cfg.marginX + cfg.colSpacing * ci.toFloat
+    headers := headers.push (Html.element "text"
+      #[sn "x" cx, sn "y" 20,
+        sa "textAnchor" "middle", sa "dominantBaseline" "middle",
+        sa "fill" "var(--vscode-editor-foreground)",
+        sa "fontSize" "14", sa "fontWeight" "bold"]
+      #[Html.text (exec.threadName tid)])
+    ci := ci + 1
+
+  -- ── 6. Event nodes ─────────────────────────────────────────
+  let mut nodes : Array Html := #[]
+  for e in exec.events do
+    let some (cx, cy) := posMap[e.id]? | continue
+    let color := threadColor e.t_id initTid
+    let label := s!"{exec.threadName e.t_id}: {eventDisplayName e exec.locName}"
+    let halfW := cfg.nodeW / 2
+    let halfH := cfg.nodeH / 2
+    let rect := Html.element "rect"
+      #[sn "x" (cx - halfW), sn "y" (cy - halfH),
+        sn "width" cfg.nodeW, sn "height" cfg.nodeH,
+        sa "rx" "4", sa "ry" "4",
+        sa "fill" "var(--vscode-editor-background)",
+        sa "stroke" color, sa "strokeWidth" "1.5"] #[]
+    let txt := Html.element "text"
+      #[sn "x" cx, sn "y" cy,
+        sa "textAnchor" "middle", sa "dominantBaseline" "middle",
+        sa "fill" color, sa "fontSize" "11"]
+      #[Html.text label]
+    nodes := nodes.push (Html.element "g" #[] #[rect, txt])
+
+  -- ── 7. Edges ───────────────────────────────────────────────
+  let shorten (x1 y1 x2 y2 gap : Float) :=
+    let dx := x2 - x1; let dy := y2 - y1
+    let len := Float.sqrt (dx * dx + dy * dy)
+    if len < 0.01 then (x1, y1, x2, y2)
+    else let u := dx / len; let v := dy / len
+         (x1 + u * gap, y1 + v * gap, x2 - u * gap, y2 - v * gap)
+
+  let mut edges : Array Html := #[]
+  let allRels : Array (RelationStyle × Array (Event × Event)) := #[
+    (poStyle, exec.po), (rfStyle, exec.rf), (coStyle, exec.co),
+    (frStyle, exec.fr), (rmwStyle, exec.rmw)]
+
+  for (style, pairs) in allRels do
+    let arrowUrl := s!"url(#arrow-{style.name})"
+    for (src, tgt) in pairs do
+      let some (sx, sy) := posMap[src.id]? | continue
+      let some (tx, ty) := posMap[tgt.id]? | continue
+      let (sx', sy', tx', ty') := shorten sx sy tx ty (cfg.nodeH / 2 + 4)
+      let sameCol := (sx - tx).abs < 1.0
+      let pathD :=
+        if sameCol then s!"M {sx'} {sy'} L {tx'} {ty'}"
+        else
+          let dx := tx' - sx'; let dy := ty' - sy'
+          let len := Float.sqrt (dx * dx + dy * dy)
+          let off := if 30 < len * 0.15 then 30 else len * 0.15
+          let px := -dy / len * off; let py := dx / len * off
+          let cpx := (sx' + tx') / 2 + px; let cpy := (sy' + ty') / 2 + py
+          s!"M {sx'} {sy'} Q {cpx} {cpy} {tx'} {ty'}"
+      let dashAt : Array (String × Lean.Json) :=
+        if style.dashed then #[sa "strokeDasharray" "6,3"] else #[]
+      let path := Html.element "path"
+        (#[sa "d" pathD, sa "stroke" style.color,
+           sa "strokeWidth" "2", sa "fill" "none",
+           sa "markerEnd" arrowUrl] ++ dashAt) #[]
+      -- Label at midpoint (offset for curves)
+      let (lx, ly) :=
+        if sameCol then ((sx' + tx') / 2 + 18, (sy' + ty') / 2)
+        else
+          let dx := tx' - sx'; let dy := ty' - sy'
+          let len := Float.sqrt (dx * dx + dy * dy)
+          let off := if 30 < len * 0.15 then 30 else len * 0.15
+          let px := -dy / len * off; let py := dx / len * off
+          ((sx' + tx') / 2 + px * 0.6, (sy' + ty') / 2 + py * 0.6 - 8)
+      let lbl := Html.element "text"
+        #[sn "x" lx, sn "y" ly,
+          sa "textAnchor" "middle", sa "dominantBaseline" "middle",
+          sa "fill" style.color, sa "fontSize" "10", sa "fontWeight" "bold"]
+        #[Html.text style.name]
+      edges := edges.push (Html.element "g" #[] #[path, lbl])
+
+  -- ── 8. Assemble SVG ────────────────────────────────────────
+  let bg := Html.element "rect"
+    #[sa "width" "100%", sa "height" "100%",
+      sa "fill" "var(--vscode-editor-background)"] #[]
+  Html.element "svg"
+    #[sn "width" svgW, sn "height" svgH,
+      sa "xmlns" "http://www.w3.org/2000/svg",
+      ("style", Lean.Json.mkObj [
+        ("border", "1px solid var(--vscode-panel-border)"),
+        ("borderRadius", "4px")])]
+    (#[defs, bg] ++ headers ++ nodes ++ edges)
+
+/-- Render a `ConcreteExecution` as an ordered (column-layout) HTML widget. -/
+def toOrderedHtml (exec : ConcreteExecution) (cfg : LayoutCfg := {}) : Html :=
+  executionToOrderedSvg exec cfg
+
+-- ════════════════════════════════════════════════════════════════
 -- § Example — X86 SB (Store Buffering) Litmus Test
 -- ════════════════════════════════════════════════════════════════
 
@@ -279,6 +454,6 @@ def sbExecution : ConcreteExecution := {
 }
 
 -- Place your cursor on the line below in VS Code to see the execution graph.
-#html toHtml sbExecution
+#html toOrderedHtml sbExecution
 
 end LitmusGraph
