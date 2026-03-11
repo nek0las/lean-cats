@@ -64,19 +64,39 @@ instance : wellformed.co evtsInput co where
 
 @[simp] def test1 : CandidateExecution evtsInput := {
   uniqueId := by aesop
-  rf := {(initWy, inst2readY), (inst1writeX, inst4readX)}
+  rf := {(initWy, inst2readY), (initWx, inst4readX)}
   rfInst := by aesop
   co := co
   rmw := ∅
-    -- All events in evtsInput have distinct ids: 1, 2, 3, 4, 10, 11.
-    -- A full proof requires exhaustive case analysis on the finite event set.
-    -- This is left as sorry since Event lacks DecidableEq (due to Sigma-typed tag).
-
 }
 
-theorem FindCycle : ¬ CatRel.Acyclic (test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po) :=
-  by
-    simp
-    sorry
+/-- The SB candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:
+    `inst1writeX →[po] inst2readY →[fr] inst3writeY →[po] inst4readX →[fr] inst1writeX`
+    This witnesses that the execution is NOT SC-consistent. -/
+theorem FindCycle : ¬ CatRel.Acyclic (test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po) := by
+  intro h
+  apply h inst1writeX
+  -- Prove each event is in evtsInput.all (needed for po membership)
+  have mem1 : inst1writeX ∈ evtsInput.all := by simp [Events.all]
+  have mem2 : inst2readY ∈ evtsInput.all := by simp [Events.all]
+  have mem3 : inst3writeY ∈ evtsInput.all := by simp [Events.all]
+  have mem4 : inst4readX ∈ evtsInput.all := by simp [Events.all]
+  -- Step 1: inst1writeX →[po] inst2readY (same thread P0, id 1 < 2)
+  have h1 : (inst1writeX, inst2readY) ∈ test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po :=
+    Or.inr ⟨mem1, mem2, rfl, by decide⟩
+  -- Step 2: inst2readY →[fr] inst3writeY (via rf⁻¹;co, witness initWy)
+  have h2 : (inst2readY, inst3writeY) ∈ test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po := by
+    left; right
+    simp only [test1, SetRel.mem_comp, SetRel.mem_inv]
+    exact ⟨initWy, by simp, by simp [co]⟩
+  -- Step 3: inst3writeY →[po] inst4readX (same thread P1, id 3 < 4)
+  have h3 : (inst3writeY, inst4readX) ∈ test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po :=
+    Or.inr ⟨mem3, mem4, rfl, by decide⟩
+  -- Step 4: inst4readX →[fr] inst1writeX (via rf⁻¹;co, witness initWx)
+  have h4 : (inst4readX, inst1writeX) ∈ test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po := by
+    left; right
+    simp only [test1, SetRel.mem_comp, SetRel.mem_inv]
+    exact ⟨initWx, by simp, by simp [co]⟩
+  exact .head h1 (.head h2 (.head h3 (.single h4)))
 
 end Litmus
