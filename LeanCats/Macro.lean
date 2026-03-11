@@ -36,20 +36,6 @@ partial def catIdentToName (stx : Syntax) : Name :=
     let joined := parts[1:].foldl (fun acc s => acc ++ "_" ++ s) parts[0]!
     joined.toName
 
--- Walk any cat_ident syntax tree, collect all ident leaves, and join with "_".
--- This handles plain idents, tick-prefixed ('ONCE), and multi-hyphen (rcu-lock, after-unlock-lock).
-partial def catIdentToName (stx : Syntax) : Name :=
-  let rec go (s : Syntax) : Array String :=
-    if s.isIdent then #[s.getId.toString]
-    else if s.isAtom then #[]  -- skip punctuation atoms like "'" and "-"
-    else s.getArgs.foldl (fun acc a => acc ++ go a) #[]
-  let parts := go stx
-  match parts with
-  | #[] => `_unknown
-  | _   =>
-    let joined := parts[1:].foldl (fun acc s => acc ++ "_" ++ s) parts[0]!
-    joined.toName
-
 instance : Coe (TSyntax `cat_ident) (TSyntax `ident) where
   coe s := mkIdent (catIdentToName s.raw)
 
