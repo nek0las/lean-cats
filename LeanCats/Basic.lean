@@ -7,12 +7,16 @@ open CatRel
 /-- Each execution is abstracted to a candidate execution 〈evts , po, rf, co, IW, sr〉 providing
 This definination is different with the formal semantics, because the `co` is defined in [stdlib.cat](https://github.com/herd/herdtools7/blob/2a7599f8ecdbde0ed67925daf6534c1a0c26d535/herd-www/cat_includes/stdlib.cat) and
 by computation, so should declare it as the base relation. -/
-structure CandidateExecution
-  (evts : Events)
-  [IsStrictTotalOrder Event (preCo evts)]
-  where
-  (evts : Events)
-  (_po : SetRel Event Event)
-  (_rf : SetRel Event Event)
-  (_fr : SetRel Event Event)
-  (_rmw : SetRel Event Event)
+structure CandidateExecution (evts : Events) where
+  idUnique := ∀ e₁ e₂ : Event, (e₁ ∈ evts ∧ e₂ ∈ evts) -> e₁.id ≠ e₂.id
+  po   := evts.po
+  rf   : SetRel Event Event
+  rfInst : wellformed.rf evts rf
+  co   : SetRel Event Event
+  [preCo : wellformed.co evts co]
+  fr   := rf.inv.comp co
+  rmw  : SetRel Event Event
+  uniqueId : ∀ (e₁ e₂ : Event),
+    e₁ ∈ evts.all → e₂ ∈ evts.all
+    -> e₁ ≠ e₂
+    → e₁.id ≠ e₂.id

@@ -17,7 +17,6 @@ def prod (s₁ s₂ : Set Event) : SetRel Event Event := s₁.prod s₂
 
 @[simp] def M : Set Event :=
   R ∪ W
-
 @[simp] def Rel.prod (lhs rhs : Event -> Prop) : Rel Event Event :=
   λ e₁ e₂ ↦ lhs e₁ ∧ rhs e₂
 
@@ -36,7 +35,7 @@ theorem RelProdIsSetProd (s₁ s₂ : Event -> Prop) (e₁ e₂ : Event) :
       aesop
     }
 
-abbrev Acyclic (r : Rel Event Event) := ∀a : Event, ¬ Relation.TransGen r a a
+abbrev Acyclic (r : SetRel Event Event) := ∀a : Event, ¬ Relation.TransGen (λ e₁ e₂ ↦ (e₁, e₂) ∈ r) a a
 
 @[simp] def Rel.internal (e₁ e₂ : Event) : Prop :=
   e₁.t_id = e₂.t_id
@@ -70,7 +69,7 @@ structure rf (evts : Events) (e₁ e₂ : Event) : Prop where
 @[simp] def external (evts : Events) : Rel Event Event :=
   λ e₁ e₂ ↦ ¬(internal evts e₁ e₂)
 
-@[simp] def isWriteSameLoc (l : Location) (e : Event) :=
+@[simp] def isWriteSameLoc (l : Nat) (e : Event) :=
   e.effect.op = Op.write ∧ e.effect.location = l
 
 def po (evts : Events) (e₁ e₂ : Event) : Prop :=
@@ -135,7 +134,6 @@ structure co.wellformed
   (e1 e2 : Event)
   : Prop :=
   ∃w, isWrite w ∧ rf evts w e1 ∧ co.wellformed evts w e2
-
 
 def com
   (evts : Events)
