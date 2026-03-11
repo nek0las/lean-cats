@@ -69,6 +69,7 @@ syntax "R" : annotable_events -- read events
 syntax "B" : annotable_events -- branch events
 syntax "F" : annotable_events -- fence events
 syntax "RMW" : annotable_events -- read-modify-write events
+syntax "SRCU" : annotable_events -- srcu events
 
 syntax "___" : predefined_events -- all events
 syntax "IW" : predefined_events -- initial writes
@@ -98,6 +99,7 @@ syntax ident ("-" ident)+ : cat_ident
 syntax dsl_term:51 : expr
 
 syntax:51 expr:51 "|" expr:50 : expr
+syntax "~" expr : expr
 syntax expr "&" expr : expr
 syntax expr ";" expr : expr
 syntax expr "\\" expr : expr
@@ -108,6 +110,8 @@ syntax expr "-" expr : expr
 syntax:71 expr "^-1" : expr
 -- The procedure will return a value, so we can use it in the expression.
 syntax cat_ident "(" expr,* ")" : expr
+
+syntax "[" expr "]" : expr
 
 syntax assertion expr ("as" cat_ident)? : inst
 -- The flag is used to witness the assertion, so it doesn't change the states of the execution, we could just ignore it.

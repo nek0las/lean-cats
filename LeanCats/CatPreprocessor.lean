@@ -63,6 +63,15 @@ def removeFrontTick (input : String) : String :=
   |>.splitOn "\n" |>.map (fun s => s.stripPrefix "\'") |> (String.intercalate "\n")
   |>.splitOn "\t" |>.map (fun s => s.stripPrefix "\'") |> (String.intercalate " ")
 
+def removeTickAndCapitalize (s : String) : String :=
+  let stripped := (s.dropPrefix "\'").toString
+  if stripped.isEmpty then
+    stripped
+  else
+    let firstChar := String.Pos.Raw.get stripped ⟨0⟩
+    let rest := stripped.drop 1
+    (firstChar.toUpper.toString ++ rest)
+
 def removeComments (input : String) : String :=
   let removedTick := removeFrontTick input
   let headProcessed : String := match removedTick.toList with
@@ -72,6 +81,10 @@ def removeComments (input : String) : String :=
   removeBlockComments headProcessed
 
 #eval removeFrontTick "'example || 'string"
+
+#eval removeTickAndCapitalize "'once"
+#eval removeTickAndCapitalize "'release"
+#eval removeTickAndCapitalize "'ACQUIRE"
 
 #eval removeComments "(**)"
 #eval removeComments "(*)"
