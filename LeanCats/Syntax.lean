@@ -15,6 +15,7 @@ declare_syntax_cat annotable_events
 declare_syntax_cat predefined_events
 declare_syntax_cat predefined_relations
 declare_syntax_cat cat_ident
+declare_syntax_cat procedure_call
 
 syntax reserved:41 : expr
 syntax primitive : reserved
@@ -105,12 +106,16 @@ syntax expr "^" expr : expr
 syntax expr "+" expr : expr
 syntax expr "-" expr : expr
 syntax:71 expr "^-1" : expr
+-- The procedure will return a value, so we can use it in the expression.
+syntax cat_ident "(" expr,* ")" : expr
 
 syntax assertion expr ("as" cat_ident)? : inst
 -- The flag is used to witness the assertion, so it doesn't change the states of the execution, we could just ignore it.
 syntax "flag" assertion expr "as" expr : inst
 syntax "let" cat_ident "=" expr : inst
-syntax "enum" cat_ident "=" sepBy(cat_ident, "||")  : inst
+syntax "enum" cat_ident "=" sepBy(cat_ident, "||") : inst
+-- event class can be R W F B RMW or a custom name like SRCU
+syntax "instructions" annotable_events "[" expr "]" : inst
 
 syntax "enum" cat_ident "=" sepBy(cat_ident, "||") : inst
 -- event class can be R W F B RMW or a custom name like SRCU

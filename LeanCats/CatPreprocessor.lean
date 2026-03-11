@@ -1,19 +1,19 @@
 
 namespace String
 @[specialize]
-def foldl2Aux {α : Type u} (f : α → Char → Char → α) (s : String) (stopPos : Pos) (i : Pos) (a : α) : α :=
-  if h : i < stopPos then
-    have := Nat.sub_lt_sub_left h (String.lt_next s i)
-    let nextIdx := s.next i
-    match s.get? nextIdx with
+def foldl2Aux {α : Type u} (f : α → Char → Char → α) (s : String) (stopPos : Pos.Raw) (i : Pos.Raw) (a : α) : α :=
+  if h : i.byteIdx < stopPos.byteIdx then
+    have := Nat.sub_lt_sub_left h (String.Pos.Raw.byteIdx_lt_byteIdx_next s i)
+    let nextIdx := Pos.Raw.next s i
+    match Pos.Raw.get? s nextIdx with
       | none => a
       | some next =>
-        foldl2Aux f s stopPos nextIdx (f a (s.get i) next)
+        foldl2Aux f s stopPos nextIdx (f a (Pos.Raw.get s i) next)
   else a
-termination_by stopPos.1 - i.1
+termination_by stopPos.byteIdx - i.byteIdx
 
 @[inline] def foldl2 {α : Type u} (f : α → Char → Char → α) (init : α) (s : String) : α :=
-  foldl2Aux f s s.endPos 0 init
+  foldl2Aux f s s.endPos.1 ⟨0⟩ init
 end String
 
 inductive InComment
@@ -49,7 +49,7 @@ private def processBlock (accIncomment : String × InComment)  : Char → Char �
 
 def removeBlockComments (input : String) : String :=
   -- add a `\n` in the end that should be ignored by size-2 window
-  (input.push '\n').foldl2 processBlock ({data := []}, .outside) |>.1
+  (input.push '\n').foldl2 processBlock (String.ofList [], .outside) |>.1
 
 private def processHead (accDone : String × Bool)  : Char → String × Bool :=
   let ⟨acc, done⟩ := accDone
@@ -65,10 +65,10 @@ def removeFrontTick (input : String) : String :=
 
 def removeComments (input : String) : String :=
   let removedTick := removeFrontTick input
-  let headProcessed : String := match removedTick.data with
-    | [] => .mk []
-    | '"'::rest => (String.mk rest).foldl processHead (String.mk [], false) |>.1
-    | s => .mk s
+  let headProcessed : String := match removedTick.toList with
+    | [] => .ofList []
+    | '"'::rest => (String.ofList rest).foldl processHead (String.ofList [], false) |>.1
+    | s => .ofList s
   removeBlockComments headProcessed
 
 #eval removeFrontTick "'example || 'string"
@@ -86,14 +86,14 @@ def removeComments (input : String) : String :=
 
 def Filename.mkName (inp : String) : Lean.Name := Id.run do
   let mut nm : List Char := []
-  for c in inp.data do
+  for c in inp.toList do
     if c.isAlpha then
       nm := c :: nm
     else if c == '.' then
-      return (.str  .anonymous {data := nm.reverse})
+      return (.str  .anonymous (String.ofList nm.reverse))
     else
       continue
-  return (.str  .anonymous {data := nm.reverse})
+  return (.str  .anonymous (String.ofList nm.reverse))
 
 #eval Filename.mkName "foo_bar3.baz"
 

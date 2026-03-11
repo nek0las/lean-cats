@@ -2,10 +2,6 @@ import Mathlib.Data.Rel
 
 namespace Data
 
-inductive Thread : Type where
-  | mk: Nat -> Thread
-deriving Inhabited, BEq, Repr, DecidableEq
-
 inductive Op : Type where
   | write : Op
   | read : Op
@@ -13,24 +9,43 @@ inductive Op : Type where
   | branch : Op
 deriving Inhabited, BEq, Repr, DecidableEq
 
-abbrev Location := String
-
 structure Effect : Type where
   op : Op
-  location : Location
+  location : Nat
   -- For read, the value can not be determined at the begining.
   value : Option Nat
   isFirstWrite : Bool
   isFinalWrite : Bool
 deriving Inhabited, BEq, Repr, DecidableEq
 
-class Event where
-  (id : Nat)   -- Unique identifier, consistent with program order for a given thread
-  (t_id : Nat)      -- Thread ID
-  (t : Thread)    -- Associated thread
-  (effect : Effect) -- Action performed
-  (tagType : Type) -- We attach a type to it.
-  (tag : tagType)
+structure EventId where
+  id : Nat
+deriving DecidableEq
+
+structure Event where
+  id : Nat   -- Unique identifier, consistent with program order for a given thread
+  t_id : Nat      -- Thread ID
+  effect : Effect -- Action performed
+  tag : Σ tagType : Type, tagType
+
+-- Unsafe.
+axiom event_id_unique :
+  ∀ e₁ e₂ : Event, e₁.id = e₂.id -> e₁ = e₂
+
+instance : DecidableEq Event := by
+  intro a b
+  by_cases h : a.id = b.id
+  · exact isTrue (event_id_unique a b h)
+  · exact isFalse (by
+      intro hEq
+      have : a.id = b.id := by simp [hEq]
+      exact h this)
+
+instance : BEq Event where
+  beq e1 e2 := e1.id == e2.id
+
+inductive Normal where
+| none : Normal
 
 @[simp] def reads : Set Event :=
   λ e ↦ e.effect.op = Op.read
@@ -46,32 +61,46 @@ class Event where
 -- reads, gathered in the set R;
 -- branch events, gathered in the set B;
 -- fences, gathered in the set F.
+-- this is the base events, because the CandidateExecution needs to extends it.
 structure Events where
-  (all : Set Event)
-  (Acquire : Set Event)
-  (Release : Set Event)
   (IW : Set Event)
-  (Read : Set Event)
-  (Write : Set Event)
-  (Branch : Set Event)
-  (Fence : Set Event)
+  (R : Set Event)
+  (W : Set Event)
+  (B : Set Event)
+  (F : Set Event)
   (RMW : Set Event)
+  (M : Set Event)
+
+@[simp] def Events.all (evts : Events) :=
+  evts.IW ∪ evts.R ∪ evts.W ∪ evts.B ∪ evts.F ∪ evts.RMW ∪ evts.M
 
 instance : Membership Event Events where
-  mem evts evt := evt ∈ evts.all
+  mem := fun es e => e ∈ es.all
 
-/-
-In the definition of the cat specification, we know that the tag is just an id.
-Basically it's a event.
+@[simp] def Events.preCo (evts : Events) (co : SetRel Event Event) : Prop :=
+  ∀ e₁ e₂ : Event, (e₁, e₂) ∈ co ->
+    e₁ ∈ evts.all
+    ∧ e₂ ∈ evts.all
+    ∧ e₁.effect.op = Op.write
+    ∧ e₂.effect.op = Op.write
+    ∧ e₁.effect.location = e₂.effect.location
 
-What we want is a:
-  enum A = 'z | 'a
-  enum B = 'z | 'a
-  etc
+class wellformed.co (evts : Events) (corel : SetRel Event Event) : Prop where
+  -- The Type is the Prop, and the proof is the term, do not use :=
+  irrefl : ∀ e : Event, ¬ (e, e) ∈ corel
+  trans : ∀ e₁ e₂ e₃, (e₁, e₂) ∈ corel -> (e₂, e₃) ∈ corel -> (e₁, e₃) ∈ corel
+  preco : evts.preCo corel
 
--/
+@[simp] def wellformed.rf (evts : Events) (rf : SetRel Event Event) : Prop :=
+  ∀ (w r : Event), (w, r) ∈ rf ->
+    w ∈ evts.W ∧ r ∈ evts.R
+    ∧ w.effect.location = r.effect.location
+    ∧ r.id ≠ w.id
 
--- By default it's Event, every time we use it, we should use (Tag Event) to know it's an event tag.
-class Tag (t : Type) where
+@[simp] def Events.po (evts : Events) : SetRel Event Event :=
+  λ (a, b) =>
+    a ∈ evts.all ∧ b ∈ evts.all ∧ a.t_id = b.t_id ∧ a.id < b.id
+
+#check trichotomous
 
 end Data
