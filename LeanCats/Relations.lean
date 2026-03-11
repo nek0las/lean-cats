@@ -135,6 +135,7 @@ structure co.wellformed
   : Prop :=
   ∃w, isWrite w ∧ rf evts w e1 ∧ co.wellformed evts w e2
 
+
 def com
   (evts : Events)
   [IsStrictTotalOrder Event (preCo evts)]
