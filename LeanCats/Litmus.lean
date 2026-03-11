@@ -99,4 +99,157 @@ theorem FindCycle : ¬ CatRel.Acyclic (test1.co ∪ test1.rf ∪ test1.fr ∪ te
     exact ⟨initWx, by simp, by simp [co]⟩
   exact .head h1 (.head h2 (.head h3 (.single h4)))
 
+-- ════════════════════════════════════════════════════════════════
+-- § MP (Message Passing) Litmus Test
+-- ════════════════════════════════════════════════════════════════
+-- { x=0; y=0; }
+--  P0              | P1
+--  (1) MOV [x],$1  | (3) MOV EAX,[y]   → reads 1
+--  (2) MOV [y],$1  | (4) MOV EBX,[x]   → reads 0
+--
+-- exists (1:EAX=1 ∧ 1:EBX=0)
+--
+-- P0 publishes a data write (x) then signals via a flag write (y).
+-- P1 sees the signal (y=1) but misses the data (x=0).
+-- Forbidden under SC; also forbidden under TSO.
+--
+-- Cycle: mp_writeX →[po] mp_writeY →[rf] mp_readY →[po] mp_readX →[fr] mp_writeX
+
+-- Use id range 101–111 to avoid clashes with the SB test.
+@[simp] abbrev mp_initWx : Data.Event := { id := 110, t_id := 100, effect := initOpX, tag := ⟨Normal, Normal.none⟩ }
+@[simp] abbrev mp_initWy : Data.Event := { id := 111, t_id := 100, effect := initOpY, tag := ⟨Normal, Normal.none⟩ }
+@[simp] abbrev mp_writeX : Data.Event := { id := 101, t_id := 0,   effect := wOpX,    tag := ⟨Normal, Normal.none⟩ }
+@[simp] abbrev mp_writeY : Data.Event := { id := 102, t_id := 0,   effect := wOpY,    tag := ⟨Normal, Normal.none⟩ }
+@[simp] abbrev mp_readY  : Data.Event := { id := 103, t_id := 1,   effect := rOpY,    tag := ⟨Normal, Normal.none⟩ }
+@[simp] abbrev mp_readX  : Data.Event := { id := 104, t_id := 1,   effect := rOpX,    tag := ⟨Normal, Normal.none⟩ }
+
+@[simp] abbrev mp_evts : Data.Events := {
+  IW  := {mp_initWx, mp_initWy}
+  R   := {mp_readY, mp_readX}
+  W   := {mp_initWx, mp_initWy, mp_writeX, mp_writeY}
+  B   := {}
+  F   := {}
+  RMW := {}
+  M   := {}
+}
+
+@[simp] def mp_co : SetRel Event Event := {(mp_initWx, mp_writeX), (mp_initWy, mp_writeY)}
+
+instance : wellformed.co mp_evts mp_co where
+  irrefl := by aesop
+  trans  := by aesop
+  preco  := by aesop
+
+-- rf: mp_readY sees y=1 from mp_writeY; mp_readX sees x=0 from mp_initWx
+@[simp] def mp_test : CandidateExecution mp_evts := {
+  uniqueId := by aesop
+  rf       := {(mp_writeY, mp_readY), (mp_initWx, mp_readX)}
+  rfInst   := by aesop
+  co       := mp_co
+  rmw      := ∅
+}
+
+/-- The MP candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:
+    `mp_writeX →[po] mp_writeY →[rf] mp_readY →[po] mp_readX →[fr] mp_writeX`
+    Forbidden under SC. -/
+theorem mp_FindCycle : ¬ CatRel.Acyclic (mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po) := by
+  intro h
+  apply h mp_writeX
+  have mem1 : mp_writeX ∈ mp_evts.all := by simp [Events.all]
+  have mem2 : mp_writeY ∈ mp_evts.all := by simp [Events.all]
+  have mem3 : mp_readY  ∈ mp_evts.all := by simp [Events.all]
+  have mem4 : mp_readX  ∈ mp_evts.all := by simp [Events.all]
+  -- Step 1: mp_writeX →[po] mp_writeY (P0, id 101 < 102)
+  have h1 : (mp_writeX, mp_writeY) ∈ mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po :=
+    Or.inr ⟨mem1, mem2, rfl, by decide⟩
+  -- Step 2: mp_writeY →[rf] mp_readY
+  have h2 : (mp_writeY, mp_readY) ∈ mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po := by
+    left; left; right; simp
+  -- Step 3: mp_readY →[po] mp_readX (P1, id 103 < 104)
+  have h3 : (mp_readY, mp_readX) ∈ mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po :=
+    Or.inr ⟨mem3, mem4, rfl, by decide⟩
+  -- Step 4: mp_readX →[fr] mp_writeX (via rf⁻¹;co, witness mp_initWx)
+  have h4 : (mp_readX, mp_writeX) ∈ mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po := by
+    left; right
+    simp only [mp_test, SetRel.mem_comp, SetRel.mem_inv]
+    exact ⟨mp_initWx, by simp, by simp [mp_co]⟩
+  exact .head h1 (.head h2 (.head h3 (.single h4)))
+
+-- ════════════════════════════════════════════════════════════════
+-- § LB (Load Buffering) Litmus Test
+-- ════════════════════════════════════════════════════════════════
+-- { x=0; y=0; }
+--  P0              | P1
+--  (1) MOV EAX,[x] | (3) MOV EAX,[y]   → reads 1
+--  (2) MOV [y],$1  | (4) MOV [x],$1
+--
+-- exists (0:EAX=1 ∧ 1:EAX=1)
+--
+-- Each thread reads a location *before* the other thread writes to it,
+-- yet both reads see the value 1 — this requires "load buffering" where
+-- reads are reordered before writes.
+-- Forbidden under SC and TSO; allowed under ARM/POWER.
+--
+-- Cycle: lb_readX →[po] lb_writeY →[rf] lb_readY →[po] lb_writeX →[rf] lb_readX
+-- (note: the cycle uses only po and rf — no fr edges needed)
+
+-- Use id range 201–211 to avoid clashes.
+@[simp] abbrev lb_initWx : Data.Event := { id := 210, t_id := 200, effect := initOpX, tag := ⟨Normal, Normal.none⟩ }
+@[simp] abbrev lb_initWy : Data.Event := { id := 211, t_id := 200, effect := initOpY, tag := ⟨Normal, Normal.none⟩ }
+@[simp] abbrev lb_readX  : Data.Event := { id := 201, t_id := 0,   effect := rOpX,    tag := ⟨Normal, Normal.none⟩ }
+@[simp] abbrev lb_writeY : Data.Event := { id := 202, t_id := 0,   effect := wOpY,    tag := ⟨Normal, Normal.none⟩ }
+@[simp] abbrev lb_readY  : Data.Event := { id := 203, t_id := 1,   effect := rOpY,    tag := ⟨Normal, Normal.none⟩ }
+@[simp] abbrev lb_writeX : Data.Event := { id := 204, t_id := 1,   effect := wOpX,    tag := ⟨Normal, Normal.none⟩ }
+
+@[simp] abbrev lb_evts : Data.Events := {
+  IW  := {lb_initWx, lb_initWy}
+  R   := {lb_readX, lb_readY}
+  W   := {lb_initWx, lb_initWy, lb_writeY, lb_writeX}
+  B   := {}
+  F   := {}
+  RMW := {}
+  M   := {}
+}
+
+@[simp] def lb_co : SetRel Event Event := {(lb_initWx, lb_writeX), (lb_initWy, lb_writeY)}
+
+instance : wellformed.co lb_evts lb_co where
+  irrefl := by aesop
+  trans  := by aesop
+  preco  := by aesop
+
+-- rf: lb_readX sees x=1 from lb_writeX; lb_readY sees y=1 from lb_writeY
+@[simp] def lb_test : CandidateExecution lb_evts := {
+  uniqueId := by aesop
+  rf       := {(lb_writeX, lb_readX), (lb_writeY, lb_readY)}
+  rfInst   := by aesop
+  co       := lb_co
+  rmw      := ∅
+}
+
+/-- The LB candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:
+    `lb_readX →[po] lb_writeY →[rf] lb_readY →[po] lb_writeX →[rf] lb_readX`
+    The cycle uses only `po` and `rf` — no `fr` edges are needed.
+    Forbidden under SC and TSO; allowed under ARM/POWER. -/
+theorem lb_FindCycle : ¬ CatRel.Acyclic (lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po) := by
+  intro h
+  apply h lb_readX
+  have mem1 : lb_readX  ∈ lb_evts.all := by simp [Events.all]
+  have mem2 : lb_writeY ∈ lb_evts.all := by simp [Events.all]
+  have mem3 : lb_readY  ∈ lb_evts.all := by simp [Events.all]
+  have mem4 : lb_writeX ∈ lb_evts.all := by simp [Events.all]
+  -- Step 1: lb_readX →[po] lb_writeY (P0, id 201 < 202)
+  have h1 : (lb_readX, lb_writeY) ∈ lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po :=
+    Or.inr ⟨mem1, mem2, rfl, by decide⟩
+  -- Step 2: lb_writeY →[rf] lb_readY
+  have h2 : (lb_writeY, lb_readY) ∈ lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po := by
+    left; left; right; simp
+  -- Step 3: lb_readY →[po] lb_writeX (P1, id 203 < 204)
+  have h3 : (lb_readY, lb_writeX) ∈ lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po :=
+    Or.inr ⟨mem3, mem4, rfl, by decide⟩
+  -- Step 4: lb_writeX →[rf] lb_readX
+  have h4 : (lb_writeX, lb_readX) ∈ lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po := by
+    left; left; right; simp
+  exact .head h1 (.head h2 (.head h3 (.single h4)))
+
 end Litmus
