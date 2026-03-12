@@ -1,0 +1,6 @@
+X86 CoWW
+{ x=0; }
+P0                   | P1                   ;
+MOV [x],$1           | MOV [x],$2           ;
+MOV EAX,[x]          | MOV EBX,[x]          ;
+exists (0:EAX=2 /\ 1:EBX=1)

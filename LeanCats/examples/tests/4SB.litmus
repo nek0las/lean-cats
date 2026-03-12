@@ -1,0 +1,6 @@
+X86 4SB
+{ x=0; y=0; z=0; w=0; }
+P0                   | P1                   | P2                   | P3                   ;
+MOV [x],$1           | MOV [y],$1           | MOV [z],$1           | MOV [w],$1           ;
+MOV EAX,[y]          | MOV EBX,[z]          | MOV ECX,[w]          | MOV EDX,[x]          ;
+exists (0:EAX=0 /\ 1:EBX=0 /\ 2:ECX=0 /\ 3:EDX=0)

@@ -1,0 +1,6 @@
+X86 CoRW
+{ x=0; }
+P0                   | P1                   ;
+MOV EAX,[x]          | MOV EBX,[x]          ;
+MOV [x],$1           | MOV [x],$2           ;
+exists (0:EAX=2 /\ 1:EBX=0)
