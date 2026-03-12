@@ -118,18 +118,16 @@ def computeFr (rf : Array (Nat × Nat)) (co : Array (Nat × Nat)) : Array (Nat �
 -- Candidate Execution Assembly
 -- ════════════════════════════════════════════════════════════════
 
-/-- Enumerate all candidate executions that satisfy the `exists` constraint.
+/-- Enumerate all candidate executions.
     Architecture-independent: takes `GeneratedEvents` produced by any arch-specific generator. -/
-def enumerateCandidateExecutions (gen : GeneratedEvents) (constraint : ExistsConstraint)
-    : Array ConcreteCandExec := Id.run do
+def enumerateCandidateExecutions (gen : GeneratedEvents) : Array ConcreteCandExec := Id.run do
   let rfAssignments := enumerateRfAssignments gen
-  let validRfs := rfAssignments.filter (checkConstraint gen · constraint)
   let coPerLoc := coOrdersPerLocation gen
   let coChoices := cartesianProduct coPerLoc
 
   let mut results : Array ConcreteCandExec := #[]
 
-  for rfAssign in validRfs do
+  for rfAssign in rfAssignments do
     let mut rfEdges : Array (Nat × Nat) := #[]
     for i in [:gen.reads.size] do
       rfEdges := rfEdges.push (rfAssign[i]!, gen.reads[i]!.id)
@@ -155,5 +153,15 @@ def enumerateCandidateExecutions (gen : GeneratedEvents) (constraint : ExistsCon
       }
       results := results.push exec
   return results
+
+/-- Enumerate candidate executions that satisfy the `exists` constraint. -/
+def enumerateConstrainedCandidateExecutions (gen : GeneratedEvents) (constraint : ExistsConstraint)
+    : Array ConcreteCandExec :=
+  (enumerateCandidateExecutions gen).filter fun exec =>
+    let rfAssign := gen.reads.map fun r =>
+      match exec.rf.find? (fun (_, rid) => rid == r.id) with
+      | some (wid, _) => wid
+      | none => 0
+    checkConstraint gen rfAssign constraint
 
 end LitmusParser

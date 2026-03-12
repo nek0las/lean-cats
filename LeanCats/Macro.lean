@@ -20,8 +20,6 @@ syntax "[reserved|" reserved "," cat_ident "," cat_ident "]" : term
 syntax "[predefined-relations|" predefined_relations "," cat_ident "," cat_ident "]" : term
 syntax "[dsl-term|" dsl_term "," cat_ident "," cat_ident "]" : term
 
-initialize tagsAccExt : HashMapExtension String (List String) ← mkHashMapExtension `tags String (List String)
-
 -- Walk any cat_ident syntax tree, collect all ident leaves, and join with "_".
 -- This handles plain idents, tick-prefixed ('ONCE), and multi-hyphen (rcu-lock, after-unlock-lock).
 partial def catIdentToName (stx : Syntax) : Name :=
@@ -62,7 +60,7 @@ macro_rules
     `(SetRel.comp ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
 
   | `([expr| [ $i:expr ], $evts, $X ]) =>
-    `(SetRel.mkId `([expr| $i, $evts, $X]) )
+    `(SetRel.mkId ([expr| $i, $evts, $X]))
 
   | `([expr| $e₁:expr * $e₂:expr, $evts, $X]) =>
     `(CatRel.prod ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
@@ -145,27 +143,28 @@ macro_rules
 
 macro_rules
   | `([predefined-relations| fr, $_, $X]) =>
-    let rfIdent := mkIdent "_fr".toName
-    `($X.$rfIdent)
+    let nm := mkIdent "fr".toName
+    `($X.$nm)
 
   | `([predefined-relations| po, $_, $X]) =>
-    let rfIdent := mkIdent "_po".toName
-    `($X.$rfIdent)
+    let nm := mkIdent "po".toName
+    `($X.$nm)
 
   | `([predefined-relations| rf, $_, $X]) =>
-    let rfIdent := mkIdent "_rf".toName
-    `($X.$rfIdent)
+    let nm := mkIdent "rf".toName
+    `($X.$nm)
 
   | `([predefined-relations| rfe, $_, $X]) =>
-    let rfIdent := mkIdent "_rf".toName
-    `($X.$rfIdent)
+    let nm := mkIdent "rf".toName
+    `($X.$nm)
 
   | `([predefined-relations| rmw, $_, $X]) =>
-    let rfIdent := mkIdent "_rmw".toName
-    `($X.$rfIdent)
+    let nm := mkIdent "rmw".toName
+    `($X.$nm)
 
-  | `([predefined-relations| co, $evts, $_]) =>
-    `(CatRel.co.wellformed $evts)
+  | `([predefined-relations| co, $_, $X]) =>
+    let co' := mkIdent "co".toName
+    `($X.$co')
 
 macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
@@ -194,24 +193,24 @@ macro_rules
   | `([assertion| empty]) => `(CatRel.IsEmpty)
 
 macro_rules
-  | `([annotable-events| W, $evts, $X]) =>
+  | `([annotable-events| W, $evts, $_]) =>
     let nm := mkIdent "W".toName
-    `(($X.$evts.$nm : Set Event))
-  | `([annotable-events| R, $evts, $X]) =>
+    `(($evts.$nm : Set Event))
+  | `([annotable-events| R, $evts, $_]) =>
     let nm := mkIdent "R".toName
-    `(($X.$evts.$nm : Set Event))
-  | `([annotable-events| B, $evts, $X]) =>
+    `(($evts.$nm : Set Event))
+  | `([annotable-events| B, $evts, $_]) =>
     let nm := mkIdent "B".toName
-    `(($X.$evts.$nm : Set Event))
-  | `([annotable-events| F, $evts, $X]) =>
+    `(($evts.$nm : Set Event))
+  | `([annotable-events| F, $evts, $_]) =>
     let nm := mkIdent "F".toName
-    `(($X.$evts.$nm : Set Event))
-  | `([annotable-events| RMW, $evts, $X]) =>
+    `(($evts.$nm : Set Event))
+  | `([annotable-events| RMW, $evts, $_]) =>
     let nm := mkIdent "RMW".toName
-    `(($X.$evts.$nm : Set Event))
-  | `([annotable-events| SRCU, $evts, $X]) =>
+    `(($evts.$nm : Set Event))
+  | `([annotable-events| SRCU, $evts, $_]) =>
     let nm := mkIdent "SRCU".toName
-    `(($X.$evts.$nm : Set Event))
+    `(($evts.$nm : Set Event))
 
 namespace TestAnnotableEvents
 variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (x : CandidateExecution evts)
@@ -221,13 +220,13 @@ end TestAnnotableEvents
 
 macro_rules
   -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
-  | `([predefined-events| IW, $evts, $X]) =>
+  | `([predefined-events| IW, $evts, $_]) =>
     let nm := mkIdent "IW".toName
-    `($X.$evts.$nm)
+    `($evts.$nm)
 
-  | `([predefined-events| M, $evts, $X]) =>
+  | `([predefined-events| M, $evts, $_]) =>
     let nm := mkIdent "M".toName
-    `($X.$evts.$nm)
+    `($evts.$nm)
 
   | `([predefined-events| $a:annotable_events, $evts, $X]) =>
     `([annotable-events| $a, $evts, $X])
@@ -401,10 +400,6 @@ let Acquire = ACQUIRE \ W \ FailedRMW
 let Release = RELEASE \ R \ FailedRMW
 let Mb = MB \ FailedRMW
 let Noreturn = NORETURN \ W
-
-enum srcu = Srcu_lock || Srcu_unlock || Sync_srcu
-instructions SRCU[srcu]
-let Srcu = Srcu_lock | Srcu_unlock | Sync_srcu
 
 let Marked = (~M) | IW | ONCE | RELEASE | ACQUIRE | MB | RMW | Srcu-lock | Srcu-unlock
 let Plain = M \ Marked

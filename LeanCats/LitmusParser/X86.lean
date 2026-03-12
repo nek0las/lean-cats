@@ -232,7 +232,14 @@ def generateEvents (test : ParsedLitmus) : GeneratedEvents := Id.run do
 def parseLitmusAndEnumerate (input : String) : Except String (Array ConcreteCandExec) := do
   let test ← parseLitmus input
   let gen := generateEvents test
-  return enumerateCandidateExecutions gen test.constraint
+  return enumerateCandidateExecutions gen
+
+/-- Parse an X86 litmus test string and enumerate candidate executions
+    satisfying the `exists` constraint. -/
+def parseLitmusAndEnumerateConstrained (input : String) : Except String (Array ConcreteCandExec) := do
+  let test ← parseLitmus input
+  let gen := generateEvents test
+  return enumerateConstrainedCandidateExecutions gen test.constraint
 
 -- ════════════════════════════════════════════════════════════════
 -- Example X86 Litmus Test Strings
@@ -270,7 +277,7 @@ exists (0:EAX=1 /\\ 1:EAX=1)"
 def reportResults (label : String) (input : String) : String :=
   match parseLitmusAndEnumerate input with
   | .ok results =>
-    let header := s!"{label}: {results.size} candidate execution(s) matching constraint\n"
+    let header := s!"{label}: {results.size} candidate execution(s)\n"
     results.foldl (fun acc r => acc ++ s!"---\n{r}\n") header
   | .error e => s!"Error: {e}"
 
