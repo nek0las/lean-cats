@@ -134,7 +134,7 @@ macro_rules
 
 macro_rules
   | `([dsl-term| $i:cat_ident, $evts, $X]) =>
-      `($i $evts $X)
+      `($i $evts)
 
 macro_rules
   | `([reserved| $r:predefined_relations, $evts, $X]) =>
@@ -369,12 +369,14 @@ abbrev domain (r : SetRel Event Event) := SetRel.dom r
 abbrev range (r : SetRel Event Event) := SetRel.cod r
 
 [model| test
-  let acq = [M]
+  let acq = M
 ]
+
+#reduce test.acq
 
 namespace LinuxTest
 [model| linux
-
+let a = W
 enum Accesses = ONCE  ||
   RELEASE  ||
   ACQUIRE  ||
@@ -395,18 +397,10 @@ enum Barriers = wmb  ||
   after-srcu-read-unlock
 instructions F[Barriers]
 
-let FailedRMW = RMW \ (domain(rmw) | range(rmw))
-let Acquire = ACQUIRE \ W \ FailedRMW
-let Release = RELEASE \ R \ FailedRMW
-let Mb = MB \ FailedRMW
-let Noreturn = NORETURN \ W
-
-let Marked = (~M) | IW | ONCE | RELEASE | ACQUIRE | MB | RMW | Srcu-lock | Srcu-unlock
-let Plain = M \ Marked
-
+let c = NORETURN * W
 ]
+#reduce LinuxTest.linux.NORETURN
 
-#reduce linux.Plain
 
 -- Check the instruction sets
 end LinuxTest
