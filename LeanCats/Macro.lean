@@ -49,8 +49,6 @@ instance : Coe (TSyntax `predefined_events) (TSyntax `expr) where
 instance : Coe (TSyntax `predefined_relations) (TSyntax `expr) where
   coe s := mkNode `expr #[s]
 
-#check Set Event
-
 -- Set α -> Set (α × α)
 def SetRel.mkId (s : Set Event) : SetRel Event Event :=
   fun (e₁, e₂) => e₁ = e₂ ∧ e₁ ∈ s
@@ -261,12 +259,6 @@ macro_rules
     let nm := mkIdent "M".toName
     `(($X.$evts.$nm : Set Event))
 
-namespace TestAnnotableEvents
-variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (x : CandidateExecution evts)
-def a := [annotable-events| R, evts, x]
-#reduce a
-end TestAnnotableEvents
-
 macro_rules
   -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
   | `([predefined-events| IW, $evts, $_]) =>
@@ -279,13 +271,6 @@ macro_rules
 
   | `([predefined-events| $a:annotable_events, $evts, $X]) =>
     `([annotable-events| $a, $evts, $X])
-
-namespace TestPredefinedEvents
-variable (evts) [IsStrictTotalOrder Event (CatRel.preCo evts)] (x : CandidateExecution evts)
-def a := [predefined-events| R, evts, x]
-
-#reduce a
-end TestPredefinedEvents
 
 macro_rules
   -- We just ignore the include inst.
@@ -323,19 +308,6 @@ macro_rules
     -- We ignore the flag for now, since it doesn't change the states of the execution, it's just used to witness the assertion.
     return mkNullNode #[]
 
--- namespace LKMM
--- [inst| let rcu-fn =$[
---   unmatched-locks = Rcu-lock \ domain(matched)
---   and unmatched-unlocks = Rcu-unlock \ range(matched)
---   and unmatched = unmatched-locks | unmatched-unlocks
---   and unmatched-po = [unmatched]; po; [unmatched]
---   and unmatched-locks-to-unlocks =
---   [unmatched-locks]; po; [unmatched-unlocks]
---   and matched = matched | (unmatched-locks-to-unlocks \
---   (unmatched-po; unmatched-po))]
---
--- end LKMM
-
 /--
 Processes `instructions A[EnumType]` by generating a definition for each constructor of `EnumType`.
 Specifically, for each constructor `C` of `EnumType`, we generate:
@@ -351,13 +323,11 @@ we generate:
 def elabCatInst : CommandElab := fun stx => do
   match stx with
   | `([inst| instructions { $a:annotable_events,* }[ $c:cat_ident ] , $evts:cat_ident , $X:cat_ident, $_:cat_ident]) => do
-    dbg_trace "entering elabCatInst"
     let currNamespace <- getCurrNamespace
     -- This is used to get the full name with namespace.
     let typeName := Name.updatePrefix c.getId currNamespace
 
     let info <- getConstInfoInduct typeName
-    -- dbg_trace typeName
 
     let commands <- info.ctors.mapM (
       fun ctor => do
@@ -398,33 +368,6 @@ macro_rules
     let ret := #[nstart] ++ #[vars] ++ insts ++ #[nend]
     return mkNullNode ret
 
--- Linux-kernel memory consistency model  ("linux.bell" excerpt)
--- Comments (*...*) and tick-prefixes (') are stripped by the preprocessor
--- before these lines reach the Lean syntax; we write the cleaned form here.
-[model| t
-  enum Barriers =
-    wmb' || rmb' || barrier' || rcu_read_lock || rcu_read_unlock ||
-    rcu_lock || rcu_unlock || sync_rcu ||
-    before_atomic || after_atomic' ||
-    after_spinlock || after_unlock_lock ||
-    after_srcu_read_unlock
-
-  instructions {W}[Barriers]
-]
-
-#check t.after_atomic'
-
-#check t.Barriers.after_atomic'
-#reduce t.After_atomic
-
--- The tag name will be capilized automatically.
--- https://github.com/herd/herdtools7/blob/2ad8eadf3246b66c4e03248d80bde8a11b7d00fb/lib/BellName.ml#L31
-
--- Spot-check generated names
--- This tags used as the event tags, we don't refer them directly.
-#check t.Barriers.wmb'
-#reduce t.Barriers.wmb'
-
 @[simp] def domain (evts : Events) (_ : CandidateExecution evts) (r : SetRel Event Event) := SetRel.dom r
 
 @[simp] def range (evts : Events) (_ : CandidateExecution evts) (r : SetRel Event Event) := SetRel.cod r
@@ -442,21 +385,6 @@ macro_rules
 @[simp] def int (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
 
 @[simp] def ext (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
-
-[model| test
-  let acq = M
-]
-
-[model| testlk
-let A-cumul(r) = rf ; r
-
-let acq_po = [M] ; po ; [M]
-let FailedRMW = rf | acq_po
-let c = A-cumul(rf)
-]
-
-#reduce testlk.FailedRMW
-#reduce testlk.c
 
 [model| lkmm
 
@@ -510,11 +438,13 @@ let a = A_cumul(po_rel)
 
 let cumul_fence = [Marked] ; (A_cumul(strong_fence | po_rel) | wmb) ; [Marked]
 let prop = [Marked] ; (overwrite & ext)? ; cumul_fence* ; [Marked] ; (rfe)? ; [Marked]
---
+
+-- Happends Before Relation
 let hb = [Marked] ; (ppo | rfe | ((prop \ id) & int)) ; [Marked]
 
 acyclic hb as happens_before
---
+
+-- Propagation Before Relation
 let pb = prop ; strong_fence ; hb* ; [Marked]
 acyclic pb as propagation
 ]
