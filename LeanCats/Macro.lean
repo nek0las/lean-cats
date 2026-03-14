@@ -108,51 +108,6 @@ macro_rules
     -- function call.
     `(([dsl-term| $i, $evts, $X, $arg]) ([expr| $e, $evts, $X, $arg]))
 
--- @[term_elab catexpr]
--- def elabCatExpr : TermElab := fun stx type? => do
---   match stx with
---   | `([expr| $i:cat_ident ($e:expr), $evts, $X]) => do
---     let catName : Name := catIdentToName i.raw
---     -- We need to check if it's tag set accumulated by the `instructions` command.
---     let tagsMap : Option (List String) <- tagsAccExt.find? catName.toString
---     match tagsMap with
---     | some annotableEvts => do
---       -- If it's an instruction set, we need to generate the union of all the tags in the set.
---       let annotedEvts <- annotableEvts.mapM (fun a => `([annotable-events| $(mkIdent a.toName), $evts, $X]))
---       let dnf <- annotedEvts.foldlM (fun acc evt => do
---         let con <- `($acc ∨ [annotable-events| $evt, $evts, $X])
---         return con
---       ) (mk mkNullNode #[])
---
---       dbg_trace dnf
---
---       let currNamespace <- getCurrNamespace
---       -- This is used to get the full name with namespace.
---       let typeName := Name.updatePrefix i.getId currNamespace
---       let env <- getEnv
---
---       let info <- getConstInfoInduct typeName
---       dbg_trace typeName
---
---       let commands <- info.ctors.mapM (
---         fun ctor => do
---         -- Make the constructors name correct by removing the end tick.
---         let ctorName : Name := ctor.lastComponentAsString.dropEnd 1 |>.toName
---         -- TODO(Nekolas): Make this part `∩ [annotable-events| $a]` work.
---         let ctorDef <-
---         `(
---           abbrev $(mkIdent ctorName) :
---             Set Event := {e | e.tag = $(mkIdent ctor) } ∩ $dnf
---         )
---         return ctorDef
---       )
---
---       pure (← elabTerm (← `(($i $evts $X) ([expr| $e, $evts, $X]))) type?)
---     | none =>
---       pure (← elabTerm (← `(($i $evts $X) ([expr| $e, $evts, $X]))) type?)
---   | _ => Lean.Elab.throwUnsupportedSyntax
---   -- elabTerm expandedStx expectedType?
-
 macro_rules
   | `([reserved| $r:predefined_relations, $evts, $X]) =>
     `([predefined-relations| $r, $evts, $X])
