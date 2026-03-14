@@ -70,10 +70,10 @@ syntax "B" : annotable_events -- branch events
 syntax "F" : annotable_events -- fence events
 syntax "RMW" : annotable_events -- read-modify-write events
 syntax "SRCU" : annotable_events -- srcu events
+syntax "IW" : annotable_events -- initial writes
+syntax "M" : annotable_events -- memory events, M = W ∪ R
 
 syntax "___" : predefined_events -- all events
-syntax "IW" : predefined_events -- initial writes
-syntax "M" : predefined_events -- memory events, M = W ∪ R
 syntax annotable_events : predefined_events
 
 /- defined_relations: -/
