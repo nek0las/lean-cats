@@ -214,6 +214,9 @@ macro_rules
   | `([annotable-events| SRCU, $evts, $X]) =>
     let nm := mkIdent "SRCU".toName
     `(($X.$evts.$nm : Set Event))
+  | `([annotable-events| M, $evts, $X]) =>
+    let nm := mkIdent "M".toName
+    `(($X.$evts.$nm : Set Event))
 
 namespace TestAnnotableEvents
 variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (x : CandidateExecution evts)
@@ -393,7 +396,7 @@ enum Accesses = ONCE  ||
   ACQUIRE  ||
   NORETURN  ||
   MB
-instructions {R}[Accesses]
+instructions {R, M}[Accesses]
 
 enum Barriers = wmb  ||
   rmb  ||
