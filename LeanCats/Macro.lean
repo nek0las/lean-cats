@@ -19,6 +19,7 @@ syntax "[predefined-events|" predefined_events "," cat_ident "," cat_ident "]" :
 syntax "[reserved|" reserved "," cat_ident "," cat_ident "]" : term
 syntax "[predefined-relations|" predefined_relations "," cat_ident "," cat_ident "]" : term
 syntax "[dsl-term|" dsl_term "," cat_ident "," cat_ident "]" : term
+syntax "[dsl-term|" dsl_term "," cat_ident "]" : term
 
 -- Walk any cat_ident syntax tree, collect all ident leaves, and join with "_".
 -- This handles plain idents, tick-prefixed ('ONCE), and multi-hyphen (rcu-lock, after-unlock-lock).
@@ -134,6 +135,8 @@ macro_rules
 
 macro_rules
   | `([dsl-term| $i:cat_ident, $evts, $X]) =>
+      `($i $evts $X)
+  | `([dsl-term| $i:cat_ident, $evts]) =>
       `($i $evts)
 
 macro_rules
@@ -193,24 +196,24 @@ macro_rules
   | `([assertion| empty]) => `(CatRel.IsEmpty)
 
 macro_rules
-  | `([annotable-events| W, $evts, $_]) =>
+  | `([annotable-events| W, $evts, $X]) =>
     let nm := mkIdent "W".toName
-    `(($evts.$nm : Set Event))
-  | `([annotable-events| R, $evts, $_]) =>
+    `(($X.$evts.$nm : Set Event))
+  | `([annotable-events| R, $evts, $X]) =>
     let nm := mkIdent "R".toName
-    `(($evts.$nm : Set Event))
-  | `([annotable-events| B, $evts, $_]) =>
+    `(($X.$evts.$nm : Set Event))
+  | `([annotable-events| B, $evts, $X]) =>
     let nm := mkIdent "B".toName
-    `(($evts.$nm : Set Event))
-  | `([annotable-events| F, $evts, $_]) =>
+    `(($X.$evts.$nm : Set Event))
+  | `([annotable-events| F, $evts, $X]) =>
     let nm := mkIdent "F".toName
-    `(($evts.$nm : Set Event))
-  | `([annotable-events| RMW, $evts, $_]) =>
+    `(($X.$evts.$nm : Set Event))
+  | `([annotable-events| RMW, $evts, $X]) =>
     let nm := mkIdent "RMW".toName
-    `(($evts.$nm : Set Event))
-  | `([annotable-events| SRCU, $evts, $_]) =>
+    `(($X.$evts.$nm : Set Event))
+  | `([annotable-events| SRCU, $evts, $X]) =>
     let nm := mkIdent "SRCU".toName
-    `(($evts.$nm : Set Event))
+    `(($X.$evts.$nm : Set Event))
 
 namespace TestAnnotableEvents
 variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (x : CandidateExecution evts)
@@ -271,7 +274,7 @@ macro_rules
     return mkNullNode #[]
 
 -- namespace LKMM
--- [inst| let rcu-fn =
+-- [inst| let rcu-fn =$[
 --   unmatched-locks = Rcu-lock \ domain(matched)
 --   and unmatched-unlocks = Rcu-unlock \ range(matched)
 --   and unmatched = unmatched-locks | unmatched-unlocks
@@ -297,14 +300,14 @@ we generate:
 @[command_elab catinst]
 def elabCatInst : CommandElab := fun stx => do
   match stx with
-  | `([inst| instructions $a:annotable_events [ $c:cat_ident ] , $evts:cat_ident , $X:cat_ident]) => do
+  | `([inst| instructions { $a:annotable_events,* }[ $c:cat_ident ] , $evts:cat_ident , $X:cat_ident]) => do
     dbg_trace "entering elabCatInst"
     let currNamespace <- getCurrNamespace
     -- This is used to get the full name with namespace.
     let typeName := Name.updatePrefix c.getId currNamespace
 
     let info <- getConstInfoInduct typeName
-    dbg_trace typeName
+    -- dbg_trace typeName
 
     let commands <- info.ctors.mapM (
       fun ctor => do
@@ -314,10 +317,15 @@ def elabCatInst : CommandElab := fun stx => do
         if (<-getEnv).contains ctorName then
           return (TSyntax.mk $ mkNullNode #[])
         else
-          let ctorDef <-
-          `(
+          let ctorDef <- `({e | e.tag = ⟨$(mkIdent typeName), $(mkIdent ctor)⟩ })
+
+          let inters : TSyntax `term ← a.getElems.foldlM
+            (fun (acc : TSyntax `term) (ae_i : TSyntax `annotable_events) => do
+            `( $acc ∩ [annotable-events| $ae_i, $evts, $X] )) ctorDef
+
+          let ctorDef <- `(
             abbrev $(mkIdent ctorName) :
-              Set Event := {e | e.tag = ⟨$(mkIdent typeName), $(mkIdent ctor)⟩ } ∩ ([annotable-events| $a, $evts, $X])
+              Set Event := $inters
           )
           return ctorDef
         )
@@ -339,6 +347,8 @@ macro_rules
     let ret := #[nstart] ++ #[vars] ++ insts ++ #[nend]
     return mkNullNode ret
 
+set_option pp.rawOnError true
+
 -- Linux-kernel memory consistency model  ("linux.bell" excerpt)
 -- Comments (*...*) and tick-prefixes (') are stripped by the preprocessor
 -- before these lines reach the Lean syntax; we write the cleaned form here.
@@ -350,8 +360,10 @@ macro_rules
     after_spinlock || after_unlock_lock ||
     after_srcu_read_unlock
 
-  instructions F[Barriers]
+  instructions {W}[Barriers]
 ]
+
+#check t.after_atomic'
 
 #check t.Barriers.after_atomic'
 #reduce t.after_atomic
@@ -374,15 +386,14 @@ abbrev range (r : SetRel Event Event) := SetRel.cod r
 
 #reduce test.acq
 
-namespace LinuxTest
-[model| linux
-let a = W
+[model| lkmm
+
 enum Accesses = ONCE  ||
   RELEASE  ||
   ACQUIRE  ||
   NORETURN  ||
   MB
-instructions R[Accesses]
+instructions {R}[Accesses]
 
 enum Barriers = wmb  ||
   rmb  ||
@@ -395,12 +406,17 @@ enum Barriers = wmb  ||
   after-spinlock  ||
   after-unlock-lock  ||
   after-srcu-read-unlock
-instructions F[Barriers]
+instructions {F, B}[Barriers]
 
-let c = NORETURN * W
+let FailedRMW = RMW \ (domain(rmw) | range(rmw))
+let Acquire = ACQUIRE \ W \ FailedRMW
+let Release = RELEASE \ R \ FailedRMW
+let Mb = MB \ FailedRMW
+let Noreturn = NORETURN \ W
+
+let Marked = (~M) | IW | ONCE | RELEASE | ACQUIRE | MB | RMW
+
+let Plain = M \ Marked
 ]
-#reduce LinuxTest.linux.NORETURN
 
-
--- Check the instruction sets
-end LinuxTest
+#reduce lkmm.Marked
