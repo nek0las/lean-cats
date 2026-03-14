@@ -35,13 +35,24 @@ theorem RelProdIsSetProd (s₁ s₂ : Event -> Prop) (e₁ e₂ : Event) :
       aesop
     }
 
-abbrev Acyclic (r : SetRel Event Event) := ∀a : Event, ¬ Relation.TransGen (λ e₁ e₂ ↦ (e₁, e₂) ∈ r) a a
+abbrev SetRel.ReflexiveTrans (r : SetRel Event Event) :=
+  {(e₁, e₂) | Relation.ReflTransGen (λ a b ↦ (a, b) ∈ r) e₁ e₂}
 
-@[simp] def Rel.internal (e₁ e₂ : Event) : Prop :=
-  e₁.t_id = e₂.t_id
+abbrev SetRel.TransGen (r : SetRel Event Event) :=
+  {(e₁, e₂) | Relation.TransGen (λ a b ↦ (a, b) ∈ r) e₁ e₂}
 
-@[simp] def Rel.external (e₁ e₂ : Event) : Prop :=
-  ¬ (Rel.internal e₁ e₂)
+abbrev SetRel.Acyclic (r : SetRel Event Event) := ∀a : Event, (a, a) ∉ SetRel.TransGen r
+
+abbrev SetRel.IsEmpty (r : SetRel Event Event) := ∀e₁ e₂ : Event, (e₁, e₂) ∉ r
+
+@[simp] def Rel.location : SetRel Event Event :=
+  {(e₁, e₂) | e₁.effect.location = e₂.effect.location }
+
+@[simp] def Rel.internal : SetRel Event Event :=
+  {(e₁, e₂) | e₁.t_id = e₂.t_id}
+
+@[simp] def Rel.external : SetRel Event Event :=
+  {(e₁, e₂) | (e₁, e₂) ∉ Rel.internal}
 
 @[simp] def Rel.empty (_ _ : Event) : Prop :=
   False
