@@ -55,7 +55,7 @@ macro_rules
     `(Set.union ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
 
   | `([expr| $e₁:expr & $e₂:expr, $evts, $X]) =>
-    `(CatRel.inter ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
+    `(Set.inter ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
 
   | `([expr| $e₁:expr ; $e₂:expr, $evts, $X]) =>
     `(SetRel.comp ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
@@ -379,9 +379,15 @@ set_option pp.rawOnError true
 #check t.Barriers.wmb'
 #reduce t.Barriers.wmb'
 
-abbrev domain (r : SetRel Event Event) := SetRel.dom r
+@[simp] def domain (r : SetRel Event Event) := SetRel.dom r
 
-abbrev range (r : SetRel Event Event) := SetRel.cod r
+@[simp] def range (r : SetRel Event Event) := SetRel.cod r
+
+@[simp] def po_loc (evts : Events) (X : CandidateExecution evts) := X.po ∩ CatRel.Rel.internal
+
+@[simp] def fre (evts : Events) (X : CandidateExecution evts) := X.fr ∩ CatRel.Rel.internal
+
+@[simp] def coe (evts : Events) (X : CandidateExecution evts) := X.co ∩ CatRel.Rel.internal
 
 [model| test
   let acq = M
@@ -427,9 +433,10 @@ let po_rel = [M] ; po ; [Release]
 
 -- SCPV
 let com = rf | co | fr
+acyclic po_loc | com as coherence
 
-acyclic po | com as t
-
+-- Atomic Read-Modify-Write
+empty rmw & (fre ; coe) as atomic
 ]
 
-#reduce lkmm.Plain
+#reduce lkmm.coherence
