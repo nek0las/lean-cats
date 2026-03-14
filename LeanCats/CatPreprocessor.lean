@@ -1,4 +1,6 @@
 
+import Std.Data.HashMap
+
 namespace String
 @[specialize]
 def foldl2Aux {α : Type u} (f : α → Char → Char → α) (s : String) (stopPos : Pos.Raw) (i : Pos.Raw) (a : α) : α :=
@@ -72,13 +74,71 @@ def removeTickAndCapitalize (s : String) : String :=
     let rest := stripped.drop 1
     (firstChar.toUpper.toString ++ rest)
 
+private structure InstrGroup where
+  firstIdx : Nat
+  events   : Array String
+
+private def parseInstructionsLine? (line : String) : Option (Array String × String) :=
+  let trimmed := (String.trimAscii line).toString
+  if !(trimmed.startsWith "instructions ") then
+    none
+  else
+    let rest := (String.dropPrefix trimmed "instructions ").toString
+    match rest.splitOn "[" with
+    | [evtsRaw, tagsAndTail] =>
+      match tagsAndTail.splitOn "]" with
+      | [] => none
+      | tag::_ =>
+        let eventText := (String.trimAscii evtsRaw).toString
+        let events :=
+          if eventText.startsWith "{" && eventText.endsWith "}" then
+            let body := ((eventText.drop 1).dropEnd 1).toString
+            (body.splitOn ",").map (fun s => (String.trimAscii s).toString) |>.toArray
+          else
+            #[eventText]
+        let tagTrimmed := (String.trimAscii tag).toString
+        if events.isEmpty || tagTrimmed.isEmpty then none
+        else some (events, tagTrimmed)
+    | _ => none
+
+private def mergeInstructionTagLines (input : String) : String := Id.run do
+  let lines := input.splitOn "\n"
+  let mut groups : Std.HashMap String InstrGroup := {}
+
+  for i in [:lines.length] do
+    let line := lines[i]!
+    match parseInstructionsLine? line with
+    | none => pure ()
+    | some (events, tag) =>
+      match groups.get? tag with
+      | none =>
+        groups := groups.insert tag { firstIdx := i, events := events }
+      | some g =>
+        let merged := events.foldl (fun acc e => if acc.contains e then acc else acc.push e) g.events
+        groups := groups.insert tag { g with events := merged }
+
+  let mut out : List String := []
+  for i in [:lines.length] do
+    let line := lines[i]!
+    match parseInstructionsLine? line with
+    | none => out := line :: out
+    | some (_, tag) =>
+      match groups.get? tag with
+      | some g =>
+        if g.firstIdx == i then
+          let mergedEvts := String.intercalate ", " g.events.toList
+          out := ("instructions {" ++ mergedEvts ++ "}[" ++ tag ++ "]") :: out
+      | none => out := line :: out
+
+  String.intercalate "\n" out.reverse
+
 def removeComments (input : String) : String :=
   let removedTick := removeFrontTick input
   let headProcessed : String := match removedTick.toList with
     | [] => .ofList []
     | '"'::rest => (String.ofList rest).foldl processHead (String.ofList [], false) |>.1
     | s => .ofList s
-  removeBlockComments headProcessed
+  mergeInstructionTagLines (removeBlockComments headProcessed)
 
 #eval removeFrontTick "'example || 'string"
 
@@ -118,3 +178,7 @@ def enums_test := "enum Accesses = 'ONCE (*READ_ONCE,WRITE_ONCE*) ||
 		'MB (*xchg(),cmpxchg(),...*)"
 
 #eval removeComments enums_test
+
+def instructions_test := "instructions R[Accesses]\ninstructions W[Accesses]\ninstructions RMW[Accesses]\ninstructions F[Barriers]"
+
+#eval removeComments instructions_test

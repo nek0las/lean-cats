@@ -8,6 +8,7 @@ open CatRel
 This definination is different with the formal semantics, because the `co` is defined in [stdlib.cat](https://github.com/herd/herdtools7/blob/2a7599f8ecdbde0ed67925daf6534c1a0c26d535/herd-www/cat_includes/stdlib.cat) and
 by computation, so should declare it as the base relation. -/
 structure CandidateExecution (evts : Events) where
+  evts := evts
   idUnique := ∀ e₁ e₂ : Event, (e₁ ∈ evts ∧ e₂ ∈ evts) -> e₁.id ≠ e₂.id
   po   := evts.po
   rf   : SetRel Event Event

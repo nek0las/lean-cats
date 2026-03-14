@@ -35,7 +35,7 @@ elab "defcat" "<" filename:str ">" : command => do
 
 section Test
 
-defcat <"linux.bell.test">
+defcat <"examples/models/lkmm.bell">
 #check Accesses.ACQUIRE
 #check Accesses.MB
 

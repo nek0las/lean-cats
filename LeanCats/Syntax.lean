@@ -119,7 +119,7 @@ syntax "flag" assertion expr "as" expr : inst
 syntax "let" cat_ident "=" expr : inst
 syntax "enum" cat_ident "=" sepBy(cat_ident, "||") : inst
 -- event class can be R W F B RMW or a custom name like SRCU
-syntax "instructions" annotable_events "[" expr "]" : inst
+syntax "instructions" "{" annotable_events,+ "}" "[" expr "]" : inst
 
 syntax "(*" ident* "*)" : inst
 syntax "include" str : inst

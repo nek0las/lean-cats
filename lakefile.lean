@@ -14,6 +14,9 @@ lean_exe "lean-cats" where
 lean_exe "test-to-string" where
   root := `LeanCats.TestToString
 
+lean_exe "litmus-parser-test" where
+  root := `LeanCats.LitmusParserTest
+
 require "leanprover-community" / "mathlib"
 
 -- You should replace v0.0.3 with the latest version published under Releases
