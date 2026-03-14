@@ -10,16 +10,15 @@ open Lean Elab Command Term Meta
 open Data
 
 syntax "[model|" ident inst* "]" : command
-syntax (name := catexpr) "[expr|" expr "," cat_ident "," cat_ident "]" : term
+syntax (name := catexpr) "[expr|" expr "," cat_ident "," cat_ident "," cat_ident "]" : term
 syntax "[keyword|" keyword "]" : term
 syntax "[assertion|" assertion "]" : term
-syntax (name := catinst) "[inst|" inst "," cat_ident "," cat_ident "]" : command
+syntax (name := catinst) "[inst|" inst "," cat_ident "," cat_ident "," cat_ident "]" : command
 syntax "[annotable-events|" annotable_events "," cat_ident "," cat_ident "]" : term -- Set
 syntax "[predefined-events|" predefined_events "," cat_ident "," cat_ident "]" : term
 syntax "[reserved|" reserved "," cat_ident "," cat_ident "]" : term
 syntax "[predefined-relations|" predefined_relations "," cat_ident "," cat_ident "]" : term
-syntax "[dsl-term|" dsl_term "," cat_ident "," cat_ident "]" : term
-syntax "[dsl-term|" dsl_term "," cat_ident "]" : term
+syntax "[dsl-term|" dsl_term "," cat_ident "," cat_ident "," cat_ident "]" : term
 
 -- Walk any cat_ident syntax tree, collect all ident leaves, and join with "_".
 -- This handles plain idents, tick-prefixed ('ONCE), and multi-hyphen (rcu-lock, after-unlock-lock).
@@ -57,54 +56,59 @@ def SetRel.mkId (s : Set Event) : SetRel Event Event :=
   fun (e₁, e₂) => e₁ = e₂ ∧ e₁ ∈ s
 
 macro_rules
-  | `([expr| $e₁:predefined_relations | $e₂:predefined_relations, $evts, $X]) =>
-    `(CatRel.SetRel.union ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
+  | `([dsl-term| $i:cat_ident, $evts, $X, $arg]) =>
+    -- Apply the arg instead of using the id in the env.
+    if arg.getId = i.getId then
+      `($i)
+    else
+      `($i $evts $X)
 
-  | `([expr| $e₁:predefined_events | $e₂:predefined_events , $evts, $X]) =>
-    `(Set.union ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
+macro_rules
+  | `([expr| $e₁:expr | $e₂:expr, $evts, $X, $arg]) =>
+    `(CatRel.CatUnion.union ([expr| $e₁, $evts, $X, $arg]) ([expr| $e₂, $evts, $X, $arg]))
 
-  | `([expr| $e₁:expr & $e₂:expr, $evts, $X]) =>
-    `(Set.inter ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
+  | `([expr| $e₁:expr & $e₂:expr, $evts, $X, $arg]) =>
+    `(Set.inter ([expr| $e₁, $evts, $X, $arg]) ([expr| $e₂, $evts, $X, $arg]))
 
-  | `([expr| $e₁:expr ; $e₂:expr, $evts, $X]) =>
-    `(SetRel.comp ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
+  | `([expr| $e₁:expr ; $e₂:expr, $evts, $X, $arg]) =>
+    `(SetRel.comp ([expr| $e₁, $evts, $X, $arg]) ([expr| $e₂, $evts, $X, $arg]))
 
-  | `([expr| [ $i:expr ], $evts, $X ]) =>
-    `(SetRel.mkId ([expr| $i, $evts, $X]))
+  | `([expr| [ $i:expr ], $evts, $X, $arg]) =>
+    `(SetRel.mkId ([expr| $i, $evts, $X, $arg]))
 
-  | `([expr| $e₁:expr * $e₂:expr, $evts, $X]) =>
-    `(CatRel.prod ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
+  | `([expr| $e₁:expr * $e₂:expr, $evts, $X, $arg]) =>
+    `(CatRel.prod ([expr| $e₁, $evts, $X, $arg]) ([expr| $e₂, $evts, $X, $arg]))
 
-  | `([expr| ~ $e:expr, $evts, $X]) =>
-    `(Set.compl ([expr| $e, $evts, $X]))
+  | `([expr| ~ $e:expr, $evts, $X, $arg]) =>
+    `(Set.compl ([expr| $e, $evts, $X, $arg]))
 
-  | `([expr| $e₁:expr \ $e₂:expr, $evts, $X]) =>
-    `(Set.diff ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
+  | `([expr| $e₁:expr \ $e₂:expr, $evts, $X, $arg]) =>
+    `(Set.diff ([expr| $e₁, $evts, $X, $arg]) ([expr| $e₂, $evts, $X, $arg]))
 
-  | `([expr| $e^-1, $evts, $X]) =>
-    `(Rel.inv ([expr| $e, $evts, $X]))
+  | `([expr| $e^-1, $evts, $X, $arg]) =>
+    `(Rel.inv ([expr| $e, $evts, $X, $arg]))
 
-  | `([expr| $e ?, $evts, $X]) =>
-    `(([expr| $e, $evts, $X]) ∪ {(e₁, e₂) | e₁ = e₂})
+  | `([expr| $e ?, $evts, $X, $arg]) =>
+    `(([expr| $e, $evts, $X, $arg]) ∪ {(e₁, e₂) | e₁ = e₂})
 
-  | `([expr| $e *, $evts, $X]) =>
-    `(([expr| $e, $evts, $X]) ∪ {(e₁, e₂) | e₁ = e₂})
+  | `([expr| $e *, $evts, $X, $arg]) =>
+    `(([expr| $e, $evts, $X, $arg]) ∪ {(e₁, e₂) | e₁ = e₂})
 
-  | `([expr| $e +, $evts, $X]) =>
-    `(([expr| $e, $evts, $X]))
+  | `([expr| $e +, $evts, $X, $arg]) =>
+    `(([expr| $e, $evts, $X, $arg]))
 
-  | `([expr| $r:reserved, $evts, $X]) =>
+  | `([expr| $r:reserved, $evts, $X, $_]) =>
     `([reserved| $r, $evts, $X])
 
-  | `([expr| ($e:expr), $evts, $X]) =>
-    `([expr| $e, $evts, $X])
+  | `([expr| ($e:expr), $evts, $X, $arg]) =>
+    `([expr| $e, $evts, $X, $arg])
 
-  | `([expr| $t:dsl_term, $evts, $X]) =>
-    `(([dsl-term| $t, $evts, $X]))
+  | `([expr| $t:dsl_term, $evts, $X, $arg]) =>
+    `(([dsl-term| $t, $evts, $X, $arg]))
 
-  | `([expr| $i:cat_ident ($e:expr), $evts, $X]) => do
+  | `([expr| $i:dsl_term ($e:expr), $evts, $X, $arg]) => do
     -- function call.
-    `(($i) ([expr| $e, $evts, $X]))
+    `(([dsl-term| $i, $evts, $X, $arg]) ([expr| $e, $evts, $X, $arg]))
 
 -- @[term_elab catexpr]
 -- def elabCatExpr : TermElab := fun stx type? => do
@@ -150,10 +154,6 @@ macro_rules
 --       pure (← elabTerm (← `(($i $evts $X) ([expr| $e, $evts, $X]))) type?)
 --   | _ => Lean.Elab.throwUnsupportedSyntax
 --   -- elabTerm expandedStx expectedType?
-
-macro_rules
-  | `([dsl-term| $i:cat_ident, $evts, $X]) =>
-    `($i $evts $X)
 
 macro_rules
   | `([reserved| $r:predefined_relations, $evts, $X]) =>
@@ -286,21 +286,22 @@ end TestPredefinedEvents
 
 macro_rules
   -- We just ignore the include inst.
-  | `([inst| include $_filename:str , $_ , $_]) => return mkNullNode
+  | `([inst| include $_filename:str , $_ , $_, $_]) => return mkNullNode
 
-  | `([inst| let $nm:cat_ident = $e, $evts, $X]) =>
-    `(@[simp] def $nm := [expr|$e, $evts, $X])
+  | `([inst| let $nm:cat_ident = $e, $evts, $X, $arg]) =>
+    `(@[simp] def $nm := [expr|$e, $evts, $X, $arg])
 
-  | `([inst| let $nm:cat_ident ( $arg:cat_ident ) = $e:expr, $evts, $X]) => do
-    `(@[simp] def $nm ($arg:ident : (evts : Events) -> CandidateExecution evts -> SetRel Event Event) := [expr| $e, $evts, $X])
+  | `([inst| let $nm:cat_ident ( $arg:cat_ident ) = $e:expr, $evts, $X, $_]) => do
+    -- This is where we use the real arg.
+    `(@[simp] def $nm ($arg:ident : SetRel Event Event) := [expr| $e, $evts, $X, $arg])
 
-  | `([inst| $a:assertion $e as $nm:cat_ident, $evts, $X]) => do
-    `(def $nm := ([assertion| $a] ([expr| $e, $evts, $X])))
+  | `([inst| $a:assertion $e as $nm:cat_ident, $evts, $X, $arg]) => do
+    `(def $nm := ([assertion| $a] ([expr| $e, $evts, $X, $arg])))
 
-  | `([inst| ~$a:assertion $e as $nm:cat_ident, $evts, $X]) => do
-    `(def $nm := [assertion| $a] (¬[expr| $e, $evts, $X]))
+  | `([inst| ~$a:assertion $e as $nm:cat_ident, $evts, $X, $arg]) => do
+    `(def $nm := [assertion| $a] (¬[expr| $e, $evts, $X, $arg]))
 
-  | `([inst| enum $nm:cat_ident = $[ $tags:cat_ident ]||*, $_, $_]) => do
+  | `([inst| enum $nm:cat_ident = $[ $tags:cat_ident ]||*, $_, $_, $_]) => do
     let nmIdent : TSyntax `ident := nm
     -- Convert each cat_ident tag to a plain Lean ident (handles multi-hyphen names like rcu-lock → rcu_lock, and adds trailing ').
     let tagIdents : Array (TSyntax `ident) := tags.map (fun t =>
@@ -315,7 +316,7 @@ macro_rules
     let ret := #[indef] ++ aliases
     return mkNullNode ret
 
-  | `([inst| flag $_:assertion $_:expr as $_:expr, $_, $_]) => do
+  | `([inst| flag $_:assertion $_:expr as $_:expr, $_, $_, $_]) => do
     -- We ignore the flag for now, since it doesn't change the states of the execution, it's just used to witness the assertion.
     return mkNullNode #[]
 
@@ -346,7 +347,7 @@ we generate:
 @[command_elab catinst]
 def elabCatInst : CommandElab := fun stx => do
   match stx with
-  | `([inst| instructions { $a:annotable_events,* }[ $c:cat_ident ] , $evts:cat_ident , $X:cat_ident]) => do
+  | `([inst| instructions { $a:annotable_events,* }[ $c:cat_ident ] , $evts:cat_ident , $X:cat_ident, $_:cat_ident]) => do
     dbg_trace "entering elabCatInst"
     let currNamespace <- getCurrNamespace
     -- This is used to get the full name with namespace.
@@ -383,11 +384,12 @@ macro_rules
   -- Create the model.
   | `([model| $n:ident $xs:inst*]) => do
     let nstart <- `(namespace $n)
+    let placeHolder := mkIdent `__
     let evts := mkIdent `evts
     let X := mkIdent `x
     let vars <- `(variable ($evts : Events) [IsStrictTotalOrder Event (CatRel.preCo $evts)] ($X : CandidateExecution $evts))
     let nend <- `(end $n)
-    let insts <- xs.mapM (fun ins => `([inst| $ins, $evts, $X]))
+    let insts <- xs.mapM (fun ins => `([inst| $ins, $evts, $X, $placeHolder]))
 
     -- let insts : Array (TSyntax `command) := #[]
     let ret := #[nstart] ++ #[vars] ++ insts ++ #[nend]
@@ -420,9 +422,9 @@ macro_rules
 #check t.Barriers.wmb'
 #reduce t.Barriers.wmb'
 
-@[simp] def domain (r : SetRel Event Event) := SetRel.dom r
+@[simp] def domain (evts : Events) (_ : CandidateExecution evts) (r : SetRel Event Event) := SetRel.dom r
 
-@[simp] def range (r : SetRel Event Event) := SetRel.cod r
+@[simp] def range (evts : Events) (_ : CandidateExecution evts) (r : SetRel Event Event) := SetRel.cod r
 
 @[simp] def po_loc (evts : Events) (X : CandidateExecution evts) := X.po ∩ CatRel.Rel.location
 
@@ -434,7 +436,7 @@ macro_rules
 
 @[simp] def coe (evts : Events) (X : CandidateExecution evts) := X.co ∩ CatRel.Rel.external
 
-@[simp] def int (_: Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
+@[simp] def int (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
 
 [model| test
   let acq = M
@@ -442,9 +444,14 @@ macro_rules
 
 [model| testlk
 let A-cumul(r) = rf ; r
+
+let acq_po = [M] ; po ; [M]
+let FailedRMW = rf | acq_po
+let c = A-cumul(rf)
 ]
 
-#reduce test.acq
+#reduce testlk.FailedRMW
+#reduce testlk.c
 
 [model| lkmm
 
@@ -494,14 +501,16 @@ let ppo = to_r | to_w | fence
 
 let A_cumul(r) = (rfe ; [Marked])? ; r
 
-let cumul_fence = [Marked] ; (A_cumul(strong_fence | po_rel) | wmb) ; [Marked]
-let prop = [Marked] ; (overwrite & ext)? ; cumul_fence* ; [Marked] ; (rfe)? ; [Marked]
+let a = A_cumul(po_rel)
 
-let hb = [Marked] ; (ppo | rfe | ((prop \ id) & int)) ; [Marked]
-acyclic hb as happens-before
-
-let pb = prop ; strong_fence ; hb* ; [Marked]
-acyclic pb as propagation
+-- let cumul_fence = [Marked] ; (A_cumul(strong_fence | po_rel) | wmb) ; [Marked]
+-- let prop = [Marked] ; (overwrite & ext)? ; cumul_fence* ; [Marked] ; (rfe)? ; [Marked]
+--
+-- let hb = [Marked] ; (ppo | rfe | ((prop \ id) & int)) ; [Marked]
+-- acyclic hb as happens-before
+--
+-- let pb = prop ; strong_fence ; hb* ; [Marked]
+-- acyclic pb as propagation
 ]
 
 #reduce lkmm.coherence
