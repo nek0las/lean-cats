@@ -249,13 +249,13 @@ macro_rules
   | `([inst| include $_filename:str , $_ , $_]) => return mkNullNode
 
   | `([inst| let $nm:cat_ident = $e, $evts, $X]) =>
-    `(abbrev $nm := [expr|$e, $evts, $X])
+    `(@[simp] def $nm := [expr|$e, $evts, $X])
 
-  | `([inst| $a:assertion $e as $_:cat_ident, $evts, $X]) => do
-    `([assertion| $a] ([expr| $e, $evts, $X]))
+  | `([inst| $a:assertion $e as $nm:cat_ident, $evts, $X]) => do
+    `(def $nm := ([assertion| $a] ([expr| $e, $evts, $X])))
 
   | `([inst| ~$a:assertion $e as $nm:cat_ident, $evts, $X]) => do
-    `([assertion| $a] (¬[expr| $e, $evts, $X]))
+    `(def $nm := [assertion| $a] (¬[expr| $e, $evts, $X]))
 
   | `([inst| enum $nm:cat_ident = $[ $tags:cat_ident ]||*, $_, $_]) => do
     let nmIdent : TSyntax `ident := nm
@@ -420,6 +420,16 @@ let Noreturn = NORETURN \ W
 let Marked = (~M) | IW | ONCE | RELEASE | ACQUIRE | MB | RMW
 
 let Plain = M \ Marked
+
+-- Acquire-Release
+let acq_po = [Acquire] ; po ; [M]
+let po_rel = [M] ; po ; [Release]
+
+-- SCPV
+let com = rf | co | fr
+
+acyclic po | com as t
+
 ]
 
-#reduce lkmm.Marked
+#reduce lkmm.Plain
