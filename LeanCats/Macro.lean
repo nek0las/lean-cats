@@ -181,6 +181,9 @@ macro_rules
     let co' := mkIdent "co".toName
     `($X.$co')
 
+  | `([predefined-relations| id, $_, $_]) =>
+    `(SetRel.id)
+
   | `([predefined-relations| data, $_, $X]) =>
     let nm := mkIdent "data".toName
     `($X.$nm)
@@ -438,6 +441,8 @@ macro_rules
 
 @[simp] def int (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
 
+@[simp] def ext (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
+
 [model| test
   let acq = M
 ]
@@ -503,15 +508,18 @@ let A_cumul(r) = (rfe ; [Marked])? ; r
 
 let a = A_cumul(po_rel)
 
--- let cumul_fence = [Marked] ; (A_cumul(strong_fence | po_rel) | wmb) ; [Marked]
--- let prop = [Marked] ; (overwrite & ext)? ; cumul_fence* ; [Marked] ; (rfe)? ; [Marked]
+let cumul_fence = [Marked] ; (A_cumul(strong_fence | po_rel) | wmb) ; [Marked]
+let prop = [Marked] ; (overwrite & ext)? ; cumul_fence* ; [Marked] ; (rfe)? ; [Marked]
 --
--- let hb = [Marked] ; (ppo | rfe | ((prop \ id) & int)) ; [Marked]
--- acyclic hb as happens-before
+let hb = [Marked] ; (ppo | rfe | ((prop \ id) & int)) ; [Marked]
+
+acyclic hb as happens_before
 --
--- let pb = prop ; strong_fence ; hb* ; [Marked]
--- acyclic pb as propagation
+let pb = prop ; strong_fence ; hb* ; [Marked]
+acyclic pb as propagation
 ]
 
 #reduce lkmm.coherence
 #reduce lkmm.atomic
+#reduce lkmm.happens_before
+#reduce lkmm.propagation
