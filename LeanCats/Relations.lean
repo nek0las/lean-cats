@@ -35,6 +35,9 @@ theorem RelProdIsSetProd (s₁ s₂ : Event -> Prop) (e₁ e₂ : Event) :
       aesop
     }
 
+@[simp] def SetRel.union (r₁ r₂ : SetRel Event Event) :=
+  {(e₁, e₂) | (e₁, e₂) ∈ r₁ ∨ (e₁, e₂) ∈ r₂}
+
 abbrev SetRel.ReflexiveTrans (r : SetRel Event Event) :=
   {(e₁, e₂) | Relation.ReflTransGen (λ a b ↦ (a, b) ∈ r) e₁ e₂}
 

@@ -44,6 +44,12 @@ instance : Coe (TSyntax `ident) (TSyntax `cat_ident) where
 instance : Coe (TSyntax `ident) (TSyntax `annotable_events) where
   coe s := mkNode `annotable_events #[s]
 
+instance : Coe (TSyntax `predefined_events) (TSyntax `expr) where
+  coe s := mkNode `expr #[s]
+
+instance : Coe (TSyntax `predefined_relations) (TSyntax `expr) where
+  coe s := mkNode `expr #[s]
+
 #check Set Event
 
 -- Set α -> Set (α × α)
@@ -51,7 +57,10 @@ def SetRel.mkId (s : Set Event) : SetRel Event Event :=
   fun (e₁, e₂) => e₁ = e₂ ∧ e₁ ∈ s
 
 macro_rules
-  | `([expr| $e₁:expr | $e₂:expr, $evts, $X]) =>
+  | `([expr| $e₁:predefined_relations | $e₂:predefined_relations, $evts, $X]) =>
+    `(CatRel.SetRel.union ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
+
+  | `([expr| $e₁:predefined_events | $e₂:predefined_events , $evts, $X]) =>
     `(Set.union ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
 
   | `([expr| $e₁:expr & $e₂:expr, $evts, $X]) =>
@@ -74,6 +83,15 @@ macro_rules
 
   | `([expr| $e^-1, $evts, $X]) =>
     `(Rel.inv ([expr| $e, $evts, $X]))
+
+  | `([expr| $e ?, $evts, $X]) =>
+    `(([expr| $e, $evts, $X]) ∪ {(e₁, e₂) | e₁ = e₂})
+
+  | `([expr| $e *, $evts, $X]) =>
+    `(([expr| $e, $evts, $X]) ∪ {(e₁, e₂) | e₁ = e₂})
+
+  | `([expr| $e +, $evts, $X]) =>
+    `(([expr| $e, $evts, $X]))
 
   | `([expr| $r:reserved, $evts, $X]) =>
     `([reserved| $r, $evts, $X])
@@ -135,9 +153,7 @@ macro_rules
 
 macro_rules
   | `([dsl-term| $i:cat_ident, $evts, $X]) =>
-      `($i $evts $X)
-  | `([dsl-term| $i:cat_ident, $evts]) =>
-      `($i $evts)
+    `($i $evts $X)
 
 macro_rules
   | `([reserved| $r:predefined_relations, $evts, $X]) =>
@@ -157,10 +173,6 @@ macro_rules
     let nm := mkIdent "rf".toName
     `($X.$nm)
 
-  | `([predefined-relations| rfe, $_, $X]) =>
-    let nm := mkIdent "rf".toName
-    `($X.$nm)
-
   | `([predefined-relations| rmw, $_, $X]) =>
     let nm := mkIdent "rmw".toName
     `($X.$nm)
@@ -168,6 +180,34 @@ macro_rules
   | `([predefined-relations| co, $_, $X]) =>
     let co' := mkIdent "co".toName
     `($X.$co')
+
+  | `([predefined-relations| data, $_, $X]) =>
+    let nm := mkIdent "data".toName
+    `($X.$nm)
+
+  | `([predefined-relations| addr, $_, $X]) =>
+    let nm := mkIdent "addr".toName
+    `($X.$nm)
+
+  | `([predefined-relations| ctrl, $_, $X]) =>
+    let nm := mkIdent "ctrl".toName
+    `($X.$nm)
+
+  | `([predefined-relations| wmb, $_, $X]) =>
+    let nm := mkIdent "wmb".toName
+    `($X.$nm)
+
+  | `([predefined-relations| fence, $_, $X]) =>
+    let nm := mkIdent "fence".toName
+    `($X.$nm)
+
+  | `([predefined-relations| rmb , $_, $X]) =>
+    let nm := mkIdent "rmb".toName
+    `($X.$nm)
+
+  | `([predefined-relations| mb , $_, $X]) =>
+    let nm := mkIdent "mb".toName
+    `($X.$nm)
 
 macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
@@ -191,9 +231,9 @@ macro_rules
   | `([keyword| $a:assertion]) => `([assertion| $a])
 
 macro_rules
-  | `([assertion| irreflexive]) => `(CatRel.Irreflexive)
-  | `([assertion| acyclic]) => `(CatRel.Acyclic)
-  | `([assertion| empty]) => `(CatRel.IsEmpty)
+  | `([assertion| irreflexive]) => `(CatRel.SetRel.Irreflexive)
+  | `([assertion| acyclic]) => `(CatRel.SetRel.Acyclic)
+  | `([assertion| empty]) => `(CatRel.SetRel.IsEmpty)
 
 macro_rules
   | `([annotable-events| W, $evts, $X]) =>
@@ -238,7 +278,7 @@ macro_rules
     `([annotable-events| $a, $evts, $X])
 
 namespace TestPredefinedEvents
-variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (x : CandidateExecution evts)
+variable (evts) [IsStrictTotalOrder Event (CatRel.preCo evts)] (x : CandidateExecution evts)
 def a := [predefined-events| R, evts, x]
 
 #reduce a
@@ -251,6 +291,9 @@ macro_rules
   | `([inst| let $nm:cat_ident = $e, $evts, $X]) =>
     `(@[simp] def $nm := [expr|$e, $evts, $X])
 
+  | `([inst| let $nm:cat_ident ( $arg:cat_ident ) = $e:expr, $evts, $X]) => do
+    `(@[simp] def $nm ($arg:ident : (evts : Events) -> CandidateExecution evts -> SetRel Event Event) := [expr| $e, $evts, $X])
+
   | `([inst| $a:assertion $e as $nm:cat_ident, $evts, $X]) => do
     `(def $nm := ([assertion| $a] ([expr| $e, $evts, $X])))
 
@@ -261,7 +304,7 @@ macro_rules
     let nmIdent : TSyntax `ident := nm
     -- Convert each cat_ident tag to a plain Lean ident (handles multi-hyphen names like rcu-lock → rcu_lock, and adds trailing ').
     let tagIdents : Array (TSyntax `ident) := tags.map (fun t =>
-      mkIdent (Name.mkSimple ((catIdentToName t.raw).toString ++ "'")))
+      mkIdent (Name.mkSimple ((catIdentToName t.raw).toString)))
     let indef <- `(
       inductive $nmIdent where $[| $tagIdents:ident ]*
     )
@@ -315,7 +358,7 @@ def elabCatInst : CommandElab := fun stx => do
     let commands <- info.ctors.mapM (
       fun ctor => do
         -- Make the constructors name correct by removing the end tick.
-        let ctorName : Name := ctor.lastComponentAsString.dropEnd 1 |>.toName
+        let ctorName : Name := ctor.lastComponentAsString.dropEnd 1 |>.toName |>.capitalize
         -- TODO(Nekolas): Make this part `∩ [annotable-events| $a]` work.
         if (<-getEnv).contains ctorName then
           return (TSyntax.mk $ mkNullNode #[])
@@ -350,16 +393,14 @@ macro_rules
     let ret := #[nstart] ++ #[vars] ++ insts ++ #[nend]
     return mkNullNode ret
 
-set_option pp.rawOnError true
-
 -- Linux-kernel memory consistency model  ("linux.bell" excerpt)
 -- Comments (*...*) and tick-prefixes (') are stripped by the preprocessor
 -- before these lines reach the Lean syntax; we write the cleaned form here.
 [model| t
   enum Barriers =
-    wmb || rmb || barrier || rcu_read_lock || rcu_read_unlock ||
+    wmb' || rmb' || barrier' || rcu_read_lock || rcu_read_unlock ||
     rcu_lock || rcu_unlock || sync_rcu ||
-    before_atomic || after_atomic ||
+    before_atomic || after_atomic' ||
     after_spinlock || after_unlock_lock ||
     after_srcu_read_unlock
 
@@ -369,7 +410,7 @@ set_option pp.rawOnError true
 #check t.after_atomic'
 
 #check t.Barriers.after_atomic'
-#reduce t.after_atomic
+#reduce t.After_atomic
 
 -- The tag name will be capilized automatically.
 -- https://github.com/herd/herdtools7/blob/2ad8eadf3246b66c4e03248d80bde8a11b7d00fb/lib/BellName.ml#L31
@@ -383,39 +424,42 @@ set_option pp.rawOnError true
 
 @[simp] def range (r : SetRel Event Event) := SetRel.cod r
 
-@[simp] def po_loc (evts : Events) (X : CandidateExecution evts) := X.po ∩ CatRel.Rel.internal
+@[simp] def po_loc (evts : Events) (X : CandidateExecution evts) := X.po ∩ CatRel.Rel.location
 
-@[simp] def fre (evts : Events) (X : CandidateExecution evts) := X.fr ∩ CatRel.Rel.internal
+@[simp] def fre (evts : Events) (X : CandidateExecution evts) := X.fr ∩ CatRel.Rel.external
 
-@[simp] def coe (evts : Events) (X : CandidateExecution evts) := X.co ∩ CatRel.Rel.internal
+@[simp] def rfe (evts : Events) (X : CandidateExecution evts) := X.fr ∩ CatRel.Rel.external
+
+@[simp] def rfi (evts : Events) (X : CandidateExecution evts) := X.rf ∩ CatRel.Rel.internal
+
+@[simp] def coe (evts : Events) (X : CandidateExecution evts) := X.co ∩ CatRel.Rel.external
+
+@[simp] def int (_: Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
 
 [model| test
   let acq = M
+]
+
+[model| testlk
+let A-cumul(r) = rf ; r
 ]
 
 #reduce test.acq
 
 [model| lkmm
 
-enum Accesses = ONCE  ||
-  RELEASE  ||
-  ACQUIRE  ||
-  NORETURN  ||
-  MB
-instructions {R, M}[Accesses]
+enum Accesses = ONCE' ||
+  RELEASE'  ||
+  ACQUIRE'  ||
+  NORETURN'  ||
+  MB'
+instructions {R, W, RMW}[Accesses]
 
-enum Barriers = wmb  ||
-  rmb  ||
-  barrier  ||
-  rcu-lock   ||
-  rcu-unlock  ||
-  sync-rcu  ||
-  before-atomic  ||
-  after-atomic  ||
-  after-spinlock  ||
-  after-unlock-lock  ||
-  after-srcu-read-unlock
-instructions {F, B}[Barriers]
+enum Barriers = wmb'  ||
+  rmb'  ||
+  barrier'
+
+instructions {F}[Barriers]
 
 let FailedRMW = RMW \ (domain(rmw) | range(rmw))
 let Acquire = ACQUIRE \ W \ FailedRMW
@@ -427,6 +471,8 @@ let Marked = (~M) | IW | ONCE | RELEASE | ACQUIRE | MB | RMW
 
 let Plain = M \ Marked
 
+let strong_fence = mb
+
 -- Acquire-Release
 let acq_po = [Acquire] ; po ; [M]
 let po_rel = [M] ; po ; [Release]
@@ -437,6 +483,26 @@ acyclic po_loc | com as coherence
 
 -- Atomic Read-Modify-Write
 empty rmw & (fre ; coe) as atomic
+
+-- Preserved Program Order
+let dep = addr | data
+let rwdep = (dep | ctrl) ; [W]
+let overwrite = co | fr
+let to_w = rwdep | (overwrite & int) | (addr ; [Plain] ; wmb)
+let to_r = addr | (dep ; [Marked] ; rfi)
+let ppo = to_r | to_w | fence
+
+let A_cumul(r) = (rfe ; [Marked])? ; r
+
+let cumul_fence = [Marked] ; (A_cumul(strong_fence | po_rel) | wmb) ; [Marked]
+let prop = [Marked] ; (overwrite & ext)? ; cumul_fence* ; [Marked] ; (rfe)? ; [Marked]
+
+let hb = [Marked] ; (ppo | rfe | ((prop \ id) & int)) ; [Marked]
+acyclic hb as happens-before
+
+let pb = prop ; strong_fence ; hb* ; [Marked]
+acyclic pb as propagation
 ]
 
 #reduce lkmm.coherence
+#reduce lkmm.atomic
