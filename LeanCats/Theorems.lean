@@ -10,18 +10,29 @@ lemma internalImpliesPoOrPoMinusOne {e₁ e₂ : Event} (evts : Events) :
   internal evts e₁ e₂ -> e₁ ≠ e₂ -> po evts e₁ e₂ ∨ po evts e₂ e₁ :=
   by
     simp
-    intro he₁in
-    intro he₂in
-    intro htideq
-    intro hneq
+    intros he₁in he₂in htideq hneq
     simp [po]
     have hidneq : e₁.id ≠ e₂.id :=
       by
         intro hideq
         apply hneq
         apply Iff.mpr
-        apply evts.uniqueId
-        exact hideq
+        have h : e₁ = e₂ :=
+          by apply (event_id_unique e₁ e₂ hideq)
+
+        apply Iff.intro
+        {
+          intro h'
+          exact h'
+        }
+        {
+          intro h'
+          exact h'
+        }
+        have h : e₁ = e₂ :=
+          by apply (event_id_unique e₁ e₂ hideq)
+
+        contradiction
 
     have hle_or_gt : e₁.id < e₂.id ∨ e₁.id > e₂.id :=
       by
@@ -124,14 +135,11 @@ lemma strictPartialOrderImpliesAcyclic
 lemma AcyclicImpliesIrreflexive
   {r : Rel Event Event}
   (hnt : ∀e, ¬TransGen r e e)
-  : Irreflexive r :=
+  : Std.Irrefl r :=
   by
-    unfold Irreflexive
-    intro x
-    intro hrflx
-    apply hnt x
-    apply TransGen.single
-    exact hrflx
+    apply Std.Irrefl.mk
+    intro e hre
+    exact hnt e (TransGen.single hre)
 
 instance
   {r : Rel Event Event}
@@ -139,25 +147,25 @@ instance
   (hnt : ∀e, ¬TransGen r e e)
   : IsStrictOrder Event r where
   irrefl := by
-    apply AcyclicImpliesIrreflexive
-    exact hnt
+    intros e hre
+    apply hnt e
+    exact (TransGen.single hre)
   trans := by
     apply ht
 
 lemma ayclicMono
-  {r₁ r₂ : Rel Event Event}
-  (hacyc : Acyclic r₂)
-  (hsub : ∀ a b, r₁ a b -> r₂ a b)
-  : Acyclic r₁ :=
+  {r₁ r₂ : SetRel Event Event}
+  (hacyc : SetRel.Acyclic r₂)
+  (hsub : ∀ a b, (a, b) ∈ r₁ -> (a, b) ∈ r₂)
+  : SetRel.Acyclic r₁ :=
   by
-    have htransub : ∀ a b, TransGen r₁ a b -> TransGen r₂ a b :=
+    have htransub : ∀ a b, TransGen (λ e₁ e₂ ↦ (e₁, e₂) ∈ r₁) a b -> TransGen (λ e₁ e₂ ↦ (e₁, e₂) ∈ r₂) a b :=
       by
         intro a b
         apply TransGen.mono
         apply hsub
-    unfold Acyclic at *
-    intro e
-    intro hr₁trans
+    unfold SetRel.Acyclic at *
+    intro e hr₁trans
     apply hacyc
     apply htransub
     exact hr₁trans
