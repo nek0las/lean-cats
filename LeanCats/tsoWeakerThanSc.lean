@@ -1,5 +1,5 @@
 import LeanCats.Macro
-import LeanCats.Reader
+import LeanCats.ModelReader
 import LeanCats.Data
 import LeanCats.Relations
 import LeanCats.Theorems
@@ -10,7 +10,6 @@ defcat <"sc.cat">
 
 theorem scvtso
   (evts : Data.Events)
-  [IsStrictTotalOrder Data.Event (CatRel.preCo evts)]
   (X : CandidateExecution evts)
   : sc.sc evts X → tso.tso evts X :=
 by
@@ -19,8 +18,7 @@ by
   intro sc
   apply ayclicMono sc
   simp
-  intro a b
-  intro tso
+  intro a b tso
 
   cases tso with
   | inl h => {
@@ -40,6 +38,7 @@ by
       rename_i h
       apply Or.inr
       apply Or.inr
+      simp [CatRel.CatUnion.union] at *
       aesop
     }
   }
