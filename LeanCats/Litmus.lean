@@ -3,6 +3,16 @@ import LeanCats.Basic
 import LeanCats.Data
 open Data
 namespace Litmus
+
+instance instWellformedPo (evts : Data.Events) : wellformed.po evts.po := by
+  intro x y z hxy hyz
+  rcases hxy with ⟨hx, hy, hxyTid, hxyLt⟩
+  rcases hyz with ⟨_, hz, hyzTid, hyzLt⟩
+  exact ⟨hx, hz, Eq.trans hxyTid hyzTid, Nat.lt_trans hxyLt hyzLt⟩
+
+instance instWellformedRmwEmpty (evts : Data.Events) : wellformed.rmw evts (∅ : SetRel Event Event) := by
+  intro e h
+  exact False.elim h
 -- X86 SB
 -- "Fre PodWR Fre PodWR"
 -- { x=0; y=0; }
@@ -60,20 +70,44 @@ def co_mem_list : List (Event × Event) := [(initWx, inst1writeX), (initWy, inst
 instance : wellformed.co evtsInput co where
   irrefl := by aesop
   trans := by aesop
-  preco := by aesop
+  preco := {
+    wellTyped := by aesop
+    total := by
+      intro e₁ e₂ he₁ he₂ hloc hne
+      simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at he₁ he₂
+      rcases he₁ with rfl | rfl | rfl | rfl <;>
+      rcases he₂ with rfl | rfl | rfl | rfl <;>
+      simp_all [co]
+  }
 
 @[simp] def test1 : CandidateExecution evtsInput := {
-  uniqueId := by aesop
+  prePo := instWellformedPo evtsInput
+  uniqueId := by
+    intro e₁ e₂ _ _ hne hid
+    exact hne (Data.event_id_unique e₁ e₂ hid)
   rf := {(initWy, inst2readY), (initWx, inst4readX)}
-  rfInst := by aesop
+  rfInst := by
+    intro w r hrf
+    rcases hrf with h | h
+    · rcases h with ⟨rfl, rfl⟩
+      simp
+    · rcases h with ⟨rfl, rfl⟩
+      simp
   co := co
   rmw := ∅
+  preRMW := instWellformedRmwEmpty evtsInput
+  wmb := ∅
+  mb := ∅
+  data := ∅
+  ctrl := ∅
+  fence := ∅
+  addr := ∅
 }
 
 /-- The SB candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:
     `inst1writeX →[po] inst2readY →[fr] inst3writeY →[po] inst4readX →[fr] inst1writeX`
     This witnesses that the execution is NOT SC-consistent. -/
-theorem FindCycle : ¬ CatRel.Acyclic (test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po) := by
+theorem FindCycle : ¬ CatRel.SetRel.Acyclic (test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po) := by
   intro h
   apply h inst1writeX
   -- Prove each event is in evtsInput.all (needed for po membership)
@@ -82,20 +116,26 @@ theorem FindCycle : ¬ CatRel.Acyclic (test1.co ∪ test1.rf ∪ test1.fr ∪ te
   have mem3 : inst3writeY ∈ evtsInput.all := by simp [Events.all]
   have mem4 : inst4readX ∈ evtsInput.all := by simp [Events.all]
   -- Step 1: inst1writeX →[po] inst2readY (same thread P0, id 1 < 2)
-  have h1 : (inst1writeX, inst2readY) ∈ test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po :=
-    Or.inr ⟨mem1, mem2, rfl, by decide⟩
+  have h1po : (inst1writeX, inst2readY) ∈ test1.po := by
+    have h1evts : (inst1writeX, inst2readY) ∈ evtsInput.po :=
+      ⟨mem1, mem2, rfl, by decide⟩
+    simpa [test1] using h1evts
+  have h1 : (inst1writeX, inst2readY) ∈ test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po := Or.inr h1po
   -- Step 2: inst2readY →[fr] inst3writeY (via rf⁻¹;co, witness initWy)
   have h2 : (inst2readY, inst3writeY) ∈ test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po := by
     left; right
-    simp only [test1, SetRel.mem_comp, SetRel.mem_inv]
+    simp only [test1]
     exact ⟨initWy, by simp, by simp [co]⟩
   -- Step 3: inst3writeY →[po] inst4readX (same thread P1, id 3 < 4)
-  have h3 : (inst3writeY, inst4readX) ∈ test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po :=
-    Or.inr ⟨mem3, mem4, rfl, by decide⟩
+  have h3po : (inst3writeY, inst4readX) ∈ test1.po := by
+    have h3evts : (inst3writeY, inst4readX) ∈ evtsInput.po :=
+      ⟨mem3, mem4, rfl, by decide⟩
+    simpa [test1] using h3evts
+  have h3 : (inst3writeY, inst4readX) ∈ test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po := Or.inr h3po
   -- Step 4: inst4readX →[fr] inst1writeX (via rf⁻¹;co, witness initWx)
   have h4 : (inst4readX, inst1writeX) ∈ test1.co ∪ test1.rf ∪ test1.fr ∪ test1.po := by
     left; right
-    simp only [test1, SetRel.mem_comp, SetRel.mem_inv]
+    simp only [test1]
     exact ⟨initWx, by simp, by simp [co]⟩
   exact .head h1 (.head h2 (.head h3 (.single h4)))
 
@@ -138,21 +178,45 @@ theorem FindCycle : ¬ CatRel.Acyclic (test1.co ∪ test1.rf ∪ test1.fr ∪ te
 instance : wellformed.co mp_evts mp_co where
   irrefl := by aesop
   trans  := by aesop
-  preco  := by aesop
+  preco  := {
+    wellTyped := by aesop
+    total := by
+      intro e₁ e₂ he₁ he₂ hloc hne
+      simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at he₁ he₂
+      rcases he₁ with rfl | rfl | rfl | rfl <;>
+      rcases he₂ with rfl | rfl | rfl | rfl <;>
+      simp_all [mp_co]
+  }
 
 -- rf: mp_readY sees y=1 from mp_writeY; mp_readX sees x=0 from mp_initWx
 @[simp] def mp_test : CandidateExecution mp_evts := {
-  uniqueId := by aesop
+  prePo := instWellformedPo mp_evts
+  uniqueId := by
+    intro e₁ e₂ _ _ hne hid
+    exact hne (Data.event_id_unique e₁ e₂ hid)
   rf       := {(mp_writeY, mp_readY), (mp_initWx, mp_readX)}
-  rfInst   := by aesop
+  rfInst   := by
+    intro w r hrf
+    rcases hrf with h | h
+    · rcases h with ⟨rfl, rfl⟩
+      simp
+    · rcases h with ⟨rfl, rfl⟩
+      simp
   co       := mp_co
   rmw      := ∅
+  preRMW := instWellformedRmwEmpty mp_evts
+  wmb := ∅
+  mb := ∅
+  data := ∅
+  ctrl := ∅
+  fence := ∅
+  addr := ∅
 }
 
 /-- The MP candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:
     `mp_writeX →[po] mp_writeY →[rf] mp_readY →[po] mp_readX →[fr] mp_writeX`
     Forbidden under SC. -/
-theorem mp_FindCycle : ¬ CatRel.Acyclic (mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po) := by
+theorem mp_FindCycle : ¬ CatRel.SetRel.Acyclic (mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po) := by
   intro h
   apply h mp_writeX
   have mem1 : mp_writeX ∈ mp_evts.all := by simp [Events.all]
@@ -160,18 +224,24 @@ theorem mp_FindCycle : ¬ CatRel.Acyclic (mp_test.co ∪ mp_test.rf ∪ mp_test.
   have mem3 : mp_readY  ∈ mp_evts.all := by simp [Events.all]
   have mem4 : mp_readX  ∈ mp_evts.all := by simp [Events.all]
   -- Step 1: mp_writeX →[po] mp_writeY (P0, id 101 < 102)
-  have h1 : (mp_writeX, mp_writeY) ∈ mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po :=
-    Or.inr ⟨mem1, mem2, rfl, by decide⟩
+  have h1po : (mp_writeX, mp_writeY) ∈ mp_test.po := by
+    have h1evts : (mp_writeX, mp_writeY) ∈ mp_evts.po :=
+      ⟨mem1, mem2, rfl, by decide⟩
+    simpa [mp_test] using h1evts
+  have h1 : (mp_writeX, mp_writeY) ∈ mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po := Or.inr h1po
   -- Step 2: mp_writeY →[rf] mp_readY
   have h2 : (mp_writeY, mp_readY) ∈ mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po := by
     left; left; right; simp
   -- Step 3: mp_readY →[po] mp_readX (P1, id 103 < 104)
-  have h3 : (mp_readY, mp_readX) ∈ mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po :=
-    Or.inr ⟨mem3, mem4, rfl, by decide⟩
+  have h3po : (mp_readY, mp_readX) ∈ mp_test.po := by
+    have h3evts : (mp_readY, mp_readX) ∈ mp_evts.po :=
+      ⟨mem3, mem4, rfl, by decide⟩
+    simpa [mp_test] using h3evts
+  have h3 : (mp_readY, mp_readX) ∈ mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po := Or.inr h3po
   -- Step 4: mp_readX →[fr] mp_writeX (via rf⁻¹;co, witness mp_initWx)
   have h4 : (mp_readX, mp_writeX) ∈ mp_test.co ∪ mp_test.rf ∪ mp_test.fr ∪ mp_test.po := by
     left; right
-    simp only [mp_test, SetRel.mem_comp, SetRel.mem_inv]
+    simp only [mp_test]
     exact ⟨mp_initWx, by simp, by simp [mp_co]⟩
   exact .head h1 (.head h2 (.head h3 (.single h4)))
 
@@ -216,22 +286,46 @@ theorem mp_FindCycle : ¬ CatRel.Acyclic (mp_test.co ∪ mp_test.rf ∪ mp_test.
 instance : wellformed.co lb_evts lb_co where
   irrefl := by aesop
   trans  := by aesop
-  preco  := by aesop
+  preco  := {
+    wellTyped := by aesop
+    total := by
+      intro e₁ e₂ he₁ he₂ hloc hne
+      simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at he₁ he₂
+      rcases he₁ with rfl | rfl | rfl | rfl <;>
+      rcases he₂ with rfl | rfl | rfl | rfl <;>
+      simp_all [lb_co]
+  }
 
 -- rf: lb_readX sees x=1 from lb_writeX; lb_readY sees y=1 from lb_writeY
 @[simp] def lb_test : CandidateExecution lb_evts := {
-  uniqueId := by aesop
+  prePo := instWellformedPo lb_evts
+  uniqueId := by
+    intro e₁ e₂ _ _ hne hid
+    exact hne (Data.event_id_unique e₁ e₂ hid)
   rf       := {(lb_writeX, lb_readX), (lb_writeY, lb_readY)}
-  rfInst   := by aesop
+  rfInst   := by
+    intro w r hrf
+    rcases hrf with h | h
+    · rcases h with ⟨rfl, rfl⟩
+      simp
+    · rcases h with ⟨rfl, rfl⟩
+      simp
   co       := lb_co
   rmw      := ∅
+  preRMW := instWellformedRmwEmpty lb_evts
+  wmb := ∅
+  mb := ∅
+  data := ∅
+  ctrl := ∅
+  fence := ∅
+  addr := ∅
 }
 
 /-- The LB candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:
     `lb_readX →[po] lb_writeY →[rf] lb_readY →[po] lb_writeX →[rf] lb_readX`
     The cycle uses only `po` and `rf` — no `fr` edges are needed.
     Forbidden under SC and TSO; allowed under ARM/POWER. -/
-theorem lb_FindCycle : ¬ CatRel.Acyclic (lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po) := by
+theorem lb_FindCycle : ¬ CatRel.SetRel.Acyclic (lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po) := by
   intro h
   apply h lb_readX
   have mem1 : lb_readX  ∈ lb_evts.all := by simp [Events.all]
@@ -239,14 +333,20 @@ theorem lb_FindCycle : ¬ CatRel.Acyclic (lb_test.co ∪ lb_test.rf ∪ lb_test.
   have mem3 : lb_readY  ∈ lb_evts.all := by simp [Events.all]
   have mem4 : lb_writeX ∈ lb_evts.all := by simp [Events.all]
   -- Step 1: lb_readX →[po] lb_writeY (P0, id 201 < 202)
-  have h1 : (lb_readX, lb_writeY) ∈ lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po :=
-    Or.inr ⟨mem1, mem2, rfl, by decide⟩
+  have h1po : (lb_readX, lb_writeY) ∈ lb_test.po := by
+    have h1evts : (lb_readX, lb_writeY) ∈ lb_evts.po :=
+      ⟨mem1, mem2, rfl, by decide⟩
+    simpa [lb_test] using h1evts
+  have h1 : (lb_readX, lb_writeY) ∈ lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po := Or.inr h1po
   -- Step 2: lb_writeY →[rf] lb_readY
   have h2 : (lb_writeY, lb_readY) ∈ lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po := by
     left; left; right; simp
   -- Step 3: lb_readY →[po] lb_writeX (P1, id 203 < 204)
-  have h3 : (lb_readY, lb_writeX) ∈ lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po :=
-    Or.inr ⟨mem3, mem4, rfl, by decide⟩
+  have h3po : (lb_readY, lb_writeX) ∈ lb_test.po := by
+    have h3evts : (lb_readY, lb_writeX) ∈ lb_evts.po :=
+      ⟨mem3, mem4, rfl, by decide⟩
+    simpa [lb_test] using h3evts
+  have h3 : (lb_readY, lb_writeX) ∈ lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po := Or.inr h3po
   -- Step 4: lb_writeX →[rf] lb_readX
   have h4 : (lb_writeX, lb_readX) ∈ lb_test.co ∪ lb_test.rf ∪ lb_test.fr ∪ lb_test.po := by
     left; left; right; simp
