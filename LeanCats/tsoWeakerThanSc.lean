@@ -17,28 +17,40 @@ by
   simp
   intro sc
   apply ayclicMono sc
-  simp
-  intro a b tso
+  simp [CatRel.CatUnion.union] at *
+  intro a b h
+  rcases h with hImplied | h
+  · rcases hImplied with ⟨mid, hpo_amid, htail⟩
+    rcases htail with hId | hComp
+    · have hmid_eq_b : mid = b := hId.1
+      subst hmid_eq_b
+      exact Or.inl hpo_amid
+    · rcases hComp with ⟨x, hIdMidX, hpo_xb⟩
+      have hmid_eq_x : mid = x := hIdMidX.1
+      subst hmid_eq_x
+      exact Or.inl (X.prePo _ _ _ hpo_amid hpo_xb)
+  · rcases h with hxppo | h
+    · exact Or.inl hxppo.2
+    · rcases h with hrfe | h
+      · exact Or.inr (Or.inr (Or.inl hrfe.1))
+      · rcases h with hfr | hco
+        · exact Or.inr (Or.inr (Or.inl hfr))
+        · exact Or.inr (Or.inr (Or.inr hco))
 
-  cases tso with
-  | inl h => {
-    simp at h
-    apply Or.inl
-    obtain ⟨l, r⟩ := h
-    exact l
-  }
-  | inr h => {
-    obtain ⟨l⟩ := h
-    {
-      apply Or.inr
-      apply Or.inl
-      exact l
-    }
-    {
-      rename_i h
-      apply Or.inr
-      apply Or.inr
-      simp [CatRel.CatUnion.union] at *
-      aesop
-    }
-  }
+private def sbEvents : Array Event :=
+  #[initWx, initWy, inst1writeX, inst2readY, inst3writeY, inst4readX]
+
+private def sbRf : Array (Event × Event) :=
+  #[(initWx, inst2readY), (initWy, inst4readX)]
+
+private def sbCo : Array (Event × Event) :=
+  #[(initWx, inst1writeX), (initWy, inst3writeY)]
+
+def sbExecution : ConcreteExecution := {
+  events    := sbEvents
+  po        := computeDirectPo sbEvents
+  rf        := sbRf
+  co        := sbCo
+  fr        := computeFr sbRf sbCo
+  rmw       := #[]
+}

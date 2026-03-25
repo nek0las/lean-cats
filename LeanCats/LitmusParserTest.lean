@@ -6,7 +6,7 @@ import LeanCats.LitmusParser
 
 open LitmusParser LitmusParser.X86
 
-def testDir : String := "LeanCats/examples/tests"
+def testDir : String := "LeanCats/Cats/examples/tests"
 
 def allLitmusFiles : Array String := #[
   "2W.litmus",

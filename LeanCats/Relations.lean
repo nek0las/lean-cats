@@ -38,6 +38,13 @@ theorem RelProdIsSetProd (s₁ s₂ : Event -> Prop) (e₁ e₂ : Event) :
 @[simp] def SetRel.union (r₁ r₂ : SetRel Event Event) :=
   {(e₁, e₂) | (e₁, e₂) ∈ r₁ ∨ (e₁, e₂) ∈ r₂}
 
+class CatUnion (α : Type*) where
+  union : α → α → α
+
+@[reducible] instance : CatUnion (Set Event) where union := Set.union
+
+@[reducible] instance : CatUnion (SetRel Event Event) where union := CatRel.SetRel.union
+
 abbrev SetRel.ReflexiveTrans (r : SetRel Event Event) :=
   {(e₁, e₂) | Relation.ReflTransGen (λ a b ↦ (a, b) ∈ r) e₁ e₂}
 
@@ -148,7 +155,6 @@ structure co.wellformed
   (e1 e2 : Event)
   : Prop :=
   ∃w, isWrite w ∧ rf evts w e1 ∧ co.wellformed evts w e2
-
 
 def com
   (evts : Events)

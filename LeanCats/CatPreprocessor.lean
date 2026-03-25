@@ -60,13 +60,47 @@ private def processHead (accDone : String × Bool)  : Char → String × Bool :=
     | '"' => (acc, true)
     | _ => (acc, false)
 
+private def isCatIdentChar (c : Char) : Bool :=
+  c.isAlphanum || c == '_' || c == '-'
+
+private structure TickRewriteState where
+  acc : String := ""
+  tok : String := ""
+  pendingTick : Bool := false
+
+private def flushTickState (st : TickRewriteState) : TickRewriteState :=
+  if st.tok.isEmpty then
+    if st.pendingTick then
+      { acc := st.acc.push '\'', tok := "", pendingTick := false }
+    else
+      st
+  else
+    let acc :=
+      if st.pendingTick then st.acc ++ st.tok ++ "'"
+      else st.acc ++ st.tok
+    { acc := acc, tok := "", pendingTick := false }
+
+/-- Rewrite CAT tick-prefixed identifiers from `'TAG` to `TAG'`. -/
 def removeFrontTick (input : String) : String :=
-  (input.splitOn.map (fun s => s.stripPrefix "\'")) |> (String.intercalate " ")
-  |>.splitOn "\n" |>.map (fun s => s.stripPrefix "\'") |> (String.intercalate "\n")
-  |>.splitOn "\t" |>.map (fun s => s.stripPrefix "\'") |> (String.intercalate " ")
+  let st := input.toList.foldl (fun st c =>
+    if isCatIdentChar c then
+      { st with tok := st.tok.push c }
+    else if c == '\'' then
+      if st.tok.isEmpty then
+        if st.pendingTick then
+          { acc := st.acc.push '\'', tok := "", pendingTick := true }
+        else
+          { st with pendingTick := true }
+      else
+        { acc := st.acc ++ st.tok ++ "'", tok := "", pendingTick := false }
+    else
+      let st := flushTickState st
+      { st with acc := st.acc.push c }
+  ) {}
+  (flushTickState st).acc
 
 def removeTickAndCapitalize (s : String) : String :=
-  let stripped := (s.dropPrefix "\'").toString
+  let stripped := (s.dropPrefix "\'").toString ++ "'"
   if stripped.isEmpty then
     stripped
   else
@@ -172,7 +206,7 @@ def Filename.mkName (inp : String) : Lean.Name := Id.run do
 
 
 def enums_test := "enum Accesses = 'ONCE (*READ_ONCE,WRITE_ONCE*) ||
-		'RELEASE (*smp_store_release*) ||
+		'Release (*smp_store_release*) ||
 		'ACQUIRE (*smp_load_acquire*) ||
 		'NORETURN (* R of non-return RMW *) ||
 		'MB (*xchg(),cmpxchg(),...*)"
