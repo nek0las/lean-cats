@@ -193,3 +193,31 @@ theorem rf_fr_subset_co
   obtain ⟨w₁, h₁, h₂⟩ := hfr
   simp only [SetRel.inv] at h₁
   exact X.rfInst.unique w w₁ r hrf h₁ ▸ h₂
+
+/-- co is acyclic: no write can coherence-precede itself.
+    Follows directly from co being a strict partial order (irrefl + trans). -/
+theorem co_acyclic
+  {evts : Events}
+  (X : CandidateExecution evts) :
+  SetRel.Acyclic X.co := by
+  let r : Rel Event Event := fun e₁ e₂ => (e₁, e₂) ∈ X.co
+  have hiso : IsStrictOrder Event r :=
+    { irrefl := fun e h => X.preCo.irrefl e h
+      trans  := fun a b c hab hbc => X.preCo.trans a b c hab hbc }
+  intro a ha
+  exact strictPartialOrderImpliesAcyclic hiso a ha
+
+/-- Composing fr then co yields fr: if `r` is from-read of `w`, and `w` co-precedes `w'`,
+    then `r` is from-read of `w'`.
+    Proof: unfold fr to get witness `w₀` with `(w₀,r)∈rf` and `(w₀,w)∈co`;
+    co-transitivity gives `(w₀,w')∈co`; re-pack as fr. -/
+theorem fr_co_subset_fr
+  {evts : Events}
+  (X : CandidateExecution evts)
+  (r w w' : Event)
+  (hfr : (r, w) ∈ X.fr)
+  (hco : (w, w') ∈ X.co) :
+  (r, w') ∈ X.fr := by
+  simp only [CandidateExecution.fr] at *
+  obtain ⟨w₀, h_inv, h_co⟩ := hfr
+  exact ⟨w₀, h_inv, X.preCo.trans w₀ w w' h_co hco⟩
