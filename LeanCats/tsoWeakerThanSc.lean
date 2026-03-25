@@ -4,6 +4,9 @@ import LeanCats.Data
 import LeanCats.Relations
 import LeanCats.Theorems
 import LeanCats.Basic
+import LeanCats.Litmus
+
+open Litmus
 
 defcat <"tso.cat">
 defcat <"sc.cat">
@@ -36,21 +39,3 @@ by
       · rcases h with hfr | hco
         · exact Or.inr (Or.inr (Or.inl hfr))
         · exact Or.inr (Or.inr (Or.inr hco))
-
-private def sbEvents : Array Event :=
-  #[initWx, initWy, inst1writeX, inst2readY, inst3writeY, inst4readX]
-
-private def sbRf : Array (Event × Event) :=
-  #[(initWx, inst2readY), (initWy, inst4readX)]
-
-private def sbCo : Array (Event × Event) :=
-  #[(initWx, inst1writeX), (initWy, inst3writeY)]
-
-def sbExecution : ConcreteExecution := {
-  events    := sbEvents
-  po        := computeDirectPo sbEvents
-  rf        := sbRf
-  co        := sbCo
-  fr        := computeFr sbRf sbCo
-  rmw       := #[]
-}

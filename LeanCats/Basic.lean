@@ -28,6 +28,14 @@ structure CandidateExecution (evts : Events) where
     e₁ ∈ evts.all → e₂ ∈ evts.all
     -> e₁ ≠ e₂
     → e₁.id ≠ e₂.id
+  /-- CoWR: if a write w is program-order before a read r at the same location,
+      then r cannot observe a write older than w in coherence order.
+      Formally: the rf-source of r is either w itself or co-after w. -/
+  coWR : ∀ (w r w' : Event),
+    (w, r) ∈ evts.po
+    → w.effect.location = r.effect.location
+    → (w', r) ∈ rf
+    → (w, w') ∈ co ∨ w = w'
 
 /-- from-reads: always defined as rf⁻¹ ; co, so it is transparent to the kernel. -/
 @[simp] def CandidateExecution.fr {evts : Events} (X : CandidateExecution evts) : SetRel Event Event :=

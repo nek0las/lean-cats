@@ -109,6 +109,13 @@ instance : wellformed.co evtsInput co where
   ctrl := ∅
   fence := ∅
   addr := ∅
+  coWR := by
+    intro w r w' hpo hloc hrf
+    simp only [Events.po, Set.mem_setOf_eq] at hpo
+    simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Prod.mk.injEq] at hrf
+    rcases hrf with ⟨hw', hr⟩ | ⟨hw', hr⟩ <;>
+    subst hr <;>
+    simp_all [co, evtsInput, Events.po]
 }
 
 /-- The SB candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:
@@ -225,6 +232,14 @@ instance : wellformed.co mp_evts mp_co where
   ctrl := ∅
   fence := ∅
   addr := ∅
+  coWR := by
+    intro w r w' hpo hloc hrf
+    simp only [Events.po, Set.mem_setOf_eq] at hpo
+    simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Prod.mk.injEq] at hrf
+    rcases hrf with ⟨hw', hr⟩ | ⟨hw', hr⟩ <;>
+    subst hr <;>
+    simp_all [mp_co, mp_evts, Events.all, Set.mem_insert_iff, Set.mem_singleton_iff] <;>
+    omega
 }
 
 /-- The MP candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:
@@ -340,6 +355,14 @@ instance : wellformed.co lb_evts lb_co where
   ctrl := ∅
   fence := ∅
   addr := ∅
+  coWR := by
+    intro w r w' hpo hloc hrf
+    simp only [Events.po, Set.mem_setOf_eq] at hpo
+    simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Prod.mk.injEq] at hrf
+    rcases hrf with ⟨hw', hr⟩ | ⟨hw', hr⟩ <;>
+    subst hr <;>
+    simp_all [lb_co, lb_evts, Events.all, Set.mem_insert_iff, Set.mem_singleton_iff] <;>
+    omega
 }
 
 /-- The LB candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:

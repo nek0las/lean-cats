@@ -331,7 +331,7 @@ macro_rules
 
 @[simp] def fre (evts : Events) (X : CandidateExecution evts) := X.fr ∩ CatRel.Rel.external
 
-@[simp] def rfe (evts : Events) (X : CandidateExecution evts) := X.fr ∩ CatRel.Rel.external
+@[simp] def rfe (evts : Events) (X : CandidateExecution evts) := X.rf ∩ CatRel.Rel.external
 
 @[simp] def rfi (evts : Events) (X : CandidateExecution evts) := X.rf ∩ CatRel.Rel.internal
 
@@ -339,7 +339,7 @@ macro_rules
 
 @[simp] def int (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
 
-@[simp] def ext (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
+@[simp] def ext (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.external
 
 [model| lkmm
 
