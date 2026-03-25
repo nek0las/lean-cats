@@ -86,13 +86,20 @@ instance : wellformed.co evtsInput co where
     intro e₁ e₂ _ _ hne hid
     exact hne (Data.event_id_unique e₁ e₂ hid)
   rf := {(initWy, inst2readY), (initWx, inst4readX)}
-  rfInst := by
-    intro w r hrf
-    rcases hrf with h | h
-    · rcases h with ⟨rfl, rfl⟩
-      simp
-    · rcases h with ⟨rfl, rfl⟩
-      simp
+  rfInst := {
+    wellTyped := by
+      intro w r hrf
+      rcases hrf with h | h
+      · rcases h with ⟨rfl, rfl⟩; simp
+      · rcases h with ⟨rfl, rfl⟩; simp
+    unique := by
+      intro w₁ w₂ r h1 h2
+      simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Prod.mk.injEq] at h1 h2
+      rcases h1 with ⟨hw1, hr1⟩ | ⟨hw1, hr1⟩ <;>
+      rcases h2 with ⟨hw2, hr2⟩ | ⟨hw2, hr2⟩ <;>
+      subst hw1 hw2 <;>
+      first | rfl | exact absurd (hr1 ▸ hr2) (by decide)
+  }
   co := co
   rmw := ∅
   preRMW := instWellformedRmwEmpty evtsInput
@@ -195,13 +202,20 @@ instance : wellformed.co mp_evts mp_co where
     intro e₁ e₂ _ _ hne hid
     exact hne (Data.event_id_unique e₁ e₂ hid)
   rf       := {(mp_writeY, mp_readY), (mp_initWx, mp_readX)}
-  rfInst   := by
-    intro w r hrf
-    rcases hrf with h | h
-    · rcases h with ⟨rfl, rfl⟩
-      simp
-    · rcases h with ⟨rfl, rfl⟩
-      simp
+  rfInst   := {
+    wellTyped := by
+      intro w r hrf
+      rcases hrf with h | h
+      · rcases h with ⟨rfl, rfl⟩; simp
+      · rcases h with ⟨rfl, rfl⟩; simp
+    unique := by
+      intro w₁ w₂ r h1 h2
+      simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Prod.mk.injEq] at h1 h2
+      rcases h1 with ⟨hw1, hr1⟩ | ⟨hw1, hr1⟩ <;>
+      rcases h2 with ⟨hw2, hr2⟩ | ⟨hw2, hr2⟩ <;>
+      subst hw1 hw2 <;>
+      first | rfl | exact absurd (hr1 ▸ hr2) (by decide)
+  }
   co       := mp_co
   rmw      := ∅
   preRMW := instWellformedRmwEmpty mp_evts
@@ -303,13 +317,20 @@ instance : wellformed.co lb_evts lb_co where
     intro e₁ e₂ _ _ hne hid
     exact hne (Data.event_id_unique e₁ e₂ hid)
   rf       := {(lb_writeX, lb_readX), (lb_writeY, lb_readY)}
-  rfInst   := by
-    intro w r hrf
-    rcases hrf with h | h
-    · rcases h with ⟨rfl, rfl⟩
-      simp
-    · rcases h with ⟨rfl, rfl⟩
-      simp
+  rfInst   := {
+    wellTyped := by
+      intro w r hrf
+      rcases hrf with h | h
+      · rcases h with ⟨rfl, rfl⟩; simp
+      · rcases h with ⟨rfl, rfl⟩; simp
+    unique := by
+      intro w₁ w₂ r h1 h2
+      simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Prod.mk.injEq] at h1 h2
+      rcases h1 with ⟨hw1, hr1⟩ | ⟨hw1, hr1⟩ <;>
+      rcases h2 with ⟨hw2, hr2⟩ | ⟨hw2, hr2⟩ <;>
+      subst hw1 hw2 <;>
+      first | rfl | exact absurd (hr1 ▸ hr2) (by decide)
+  }
   co       := lb_co
   rmw      := ∅
   preRMW := instWellformedRmwEmpty lb_evts

@@ -109,11 +109,14 @@ class wellformed.co (evts : Events) (corel : SetRel Event Event) : Prop where
     ∧ e₂ ∈ evts.W
     ∧ e₁.effect.location = e₂.effect.location}
 
-@[simp] def wellformed.rf (evts : Events) (rf : SetRel Event Event) : Prop :=
-  ∀ (w r : Event), (w, r) ∈ rf ->
+structure wellformed.rf (evts : Events) (rel : SetRel Event Event) : Prop where
+  /-- Every rf pair is a write to a read at the same location. -/
+  wellTyped : ∀ (w r : Event), (w, r) ∈ rel →
     w ∈ evts.W ∧ r ∈ evts.R
     ∧ w.effect.location = r.effect.location
     ∧ r.id ≠ w.id
+  /-- rf is functional: each read reads from at most one write. -/
+  unique : ∀ (w₁ w₂ r : Event), (w₁, r) ∈ rel → (w₂, r) ∈ rel → w₁ = w₂
 
 @[simp] def wellformed.po (po : SetRel Event Event) : Prop :=
   ∀ x y z, (x, y) ∈ po -> (y, z) ∈ po -> (x, z) ∈ po

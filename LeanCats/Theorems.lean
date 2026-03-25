@@ -1,5 +1,6 @@
 import LeanCats.Relations
 import LeanCats.Data
+import LeanCats.Basic
 open Relation
 open CatRel
 open Data
@@ -153,6 +154,7 @@ instance
   trans := by
     apply ht
 
+@[simp, aesop safe apply]
 lemma ayclicMono
   {r₁ r₂ : SetRel Event Event}
   (hacyc : SetRel.Acyclic r₂)
@@ -173,3 +175,21 @@ lemma ayclicMono
 --- tso : Relation.TransGen
 ---   (Rel.po evts ∩ (prod W W ∪ prod R (R ∪ W)) ∪ union (external evts ∪ Rel.rf evts) (co evts ∪ Rel.fr evts co)) x x
 --- ⊢ Relation.TransGen (fun x y => (Rel.rf evts x y ∨ co evts x y ∨ Rel.fr evts co x y) ∨ Rel.po evts x y) ?x ?x
+
+/-- Composing rf then fr yields co: if `w` reads-from `r`, and `r` is from-read of `w'`,
+    then `w` coherence-precedes `w'`.
+
+    Proof sketch: unfolding `fr = rf⁻¹ ; co` gives a witness `w₁` with
+    `(w₁, r) ∈ rf` and `(w₁, w') ∈ co`; rf-uniqueness forces `w = w₁`;
+    substituting gives `(w, w') ∈ co`. -/
+theorem rf_fr_subset_co
+  {evts : Events}
+  (X : CandidateExecution evts)
+  (w r w' : Event)
+  (hrf : (w, r) ∈ X.rf)
+  (hfr : (r, w') ∈ X.fr) :
+  (w, w') ∈ X.co := by
+  simp only [CandidateExecution.fr] at hfr
+  obtain ⟨w₁, h₁, h₂⟩ := hfr
+  simp only [SetRel.inv] at h₁
+  exact X.rfInst.unique w w₁ r hrf h₁ ▸ h₂
