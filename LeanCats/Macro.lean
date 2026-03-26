@@ -239,10 +239,10 @@ macro_rules
     `(@[simp] def $nm ($arg:ident : SetRel Event Event) := [expr| $e, $evts, $X, $arg])
 
   | `([inst| $a:assertion $e as $nm:cat_ident, $evts, $X, $arg]) => do
-    `(def $nm := ([assertion| $a] ([expr| $e, $evts, $X, $arg])))
+    `(@[simp] def $nm := ([assertion| $a] ([expr| $e, $evts, $X, $arg])))
 
   | `([inst| ~$a:assertion $e as $nm:cat_ident, $evts, $X, $arg]) => do
-    `(def $nm := [assertion| $a] (¬[expr| $e, $evts, $X, $arg]))
+    `(@[simp] def $nm := [assertion| $a] (¬[expr| $e, $evts, $X, $arg]))
 
   | `([inst| enum $nm:cat_ident = $[ $tags:cat_ident ]||*, $_, $_, $_]) => do
     let nmIdent : TSyntax `ident := nm
@@ -327,15 +327,15 @@ macro_rules
 
 @[simp] def range (evts : Events) (_ : CandidateExecution evts) (r : SetRel Event Event) := SetRel.cod r
 
-@[simp] def po_loc (evts : Events) (X : CandidateExecution evts) := X.po ∩ CatRel.Rel.location
+@[simp] def po_loc (evts : Events) (X : CandidateExecution evts) := X.po' ∩ CatRel.Rel.location
 
 @[simp] def fre (evts : Events) (X : CandidateExecution evts) := X.fr ∩ CatRel.Rel.external
 
-@[simp] def rfe (evts : Events) (X : CandidateExecution evts) := X.rf ∩ CatRel.Rel.external
+@[simp] def rfe (evts : Events) (X : CandidateExecution evts) := X.rf' ∩ CatRel.Rel.external
 
-@[simp] def rfi (evts : Events) (X : CandidateExecution evts) := X.rf ∩ CatRel.Rel.internal
+@[simp] def rfi (evts : Events) (X : CandidateExecution evts) := X.rf' ∩ CatRel.Rel.internal
 
-@[simp] def coe (evts : Events) (X : CandidateExecution evts) := X.co ∩ CatRel.Rel.external
+@[simp] def coe (evts : Events) (X : CandidateExecution evts) := X.co' ∩ CatRel.Rel.external
 
 @[simp] def int (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
 

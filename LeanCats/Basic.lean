@@ -10,33 +10,71 @@ by computation, so should declare it as the base relation. -/
 structure CandidateExecution (evts : Events) where
   evts := evts
   idUnique := ∀ e₁ e₂ : Event, (e₁ ∈ evts ∧ e₂ ∈ evts) -> e₁.id ≠ e₂.id
-  po   := evts.po
-  [prePo: wellformed.po po]
-  rf   : SetRel Event Event
-  rfInst : wellformed.rf evts rf
-  co   : SetRel Event Event
-  [preCo : wellformed.co evts co]
-  rmw  : SetRel Event Event
-  [preRMW : wellformed.rmw evts rmw]
-  wmb  : SetRel Event Event
-  data : SetRel Event Event
-  addr : SetRel Event Event
-  ctrl : SetRel Event Event
-  fence : SetRel Event Event
-  mb : SetRel Event Event
+  po'   := evts.po
+  [prePo: wellformed.po po']
+  rf'   : SetRel Event Event := ∅
+  rfInst : wellformed.rf evts rf'
+  co'   : SetRel Event Event := ∅
+  [preCo : wellformed.co evts co']
+  rmw'  : SetRel Event Event := ∅
+  [preRMW : wellformed.rmw evts rmw']
+  wmb'  : SetRel Event Event := ∅
+  data' : SetRel Event Event := ∅
+  addr' : SetRel Event Event := ∅
+  ctrl' : SetRel Event Event := ∅
+  fence' : SetRel Event Event := ∅
+  mb' : SetRel Event Event := ∅
   uniqueId : ∀ (e₁ e₂ : Event),
     e₁ ∈ evts.all → e₂ ∈ evts.all
     -> e₁ ≠ e₂
     → e₁.id ≠ e₂.id
-  /-- CoWR: if a write w is program-order before a read r at the same location,
-      then r cannot observe a write older than w in coherence order.
-      Formally: the rf-source of r is either w itself or co-after w. -/
+  -- Internal reads-from implies program order: if a write and its read
+  -- are on the same thread, the write must precede the read in po.
+  rfiPo : ∀ (w r : Event),
+    (w, r) ∈ rf'
+    → w.t_id = r.t_id
+    → (w, r) ∈ evts.po
   coWR : ∀ (w r w' : Event),
     (w, r) ∈ evts.po
     → w.effect.location = r.effect.location
-    → (w', r) ∈ rf
-    → (w, w') ∈ co ∨ w = w'
+    → (w', r) ∈ rf'
+    → (w, w') ∈ co' ∨ w = w'
+
+@[simp] abbrev CandidateExecution.po {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.po'
+@[simp] abbrev CandidateExecution.rf {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.rf'
+@[simp] abbrev CandidateExecution.co {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.co'
+@[simp] abbrev CandidateExecution.rmw {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.rmw'
+@[simp] abbrev CandidateExecution.wmb {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.wmb'
+@[simp] abbrev CandidateExecution.data {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.data'
+@[simp] abbrev CandidateExecution.addr {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.addr'
+@[simp] abbrev CandidateExecution.ctrl {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.ctrl'
+@[simp] abbrev CandidateExecution.fence {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.fence'
+@[simp] abbrev CandidateExecution.mb {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.mb'
 
 /-- from-reads: always defined as rf⁻¹ ; co, so it is transparent to the kernel. -/
 @[simp] def CandidateExecution.fr {evts : Events} (X : CandidateExecution evts) : SetRel Event Event :=
-  X.rf.inv.comp X.co
+  X.rf'.inv.comp X.co'
+
+/-- The `uniqueId` field of any `CandidateExecution`: since `event_id_unique` makes identity
+    determined solely by ID, any two distinct events must have distinct IDs. -/
+theorem uniqueId_by_id (evts : Events) :
+    ∀ (e₁ e₂ : Event), e₁ ∈ evts.all → e₂ ∈ evts.all → e₁ ≠ e₂ → e₁.id ≠ e₂.id :=
+  fun _ _ _ _ hne hid => hne (Data.event_id_unique _ _ hid)
+
+/-- Tactic for proving the `rfiPo` and `coWR` obligations of a `CandidateExecution`
+    for concrete litmus tests with finite event sets.
+
+    Strategy: unfold all set memberships with standard `Set` simp lemmas plus any
+    user-supplied lemmas (typically the `co` and `evts` `@[simp]` definitions), then
+    close by `omega` (handles numeric contradictions on IDs / thread IDs) with
+    `simp_all` as a pre-processing step when `omega` alone is insufficient. -/
+macro "candidateExecution_wf" "[" lemmas:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
+  `(tactic|
+    (intros
+     simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Prod.mk.injEq,
+                Events.po, Events.all, Set.mem_setOf_eq, $lemmas,*] at *
+     first
+       | omega
+       | aesop
+       | (simp_all [Set.mem_insert_iff, Set.mem_singleton_iff,
+                    Events.all, $lemmas,*] <;> omega)))

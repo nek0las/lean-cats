@@ -4,9 +4,6 @@ import LeanCats.Data
 import LeanCats.Relations
 import LeanCats.Theorems
 import LeanCats.Basic
-import LeanCats.Litmus
-
-open Litmus
 
 defcat <"tso.cat">
 defcat <"sc.cat">

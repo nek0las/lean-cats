@@ -172,6 +172,19 @@ lemma ayclicMono
     apply htransub
     exact hr₁trans
 
+/-- Generalisation of `ayclicMono`: acyclicity transfers when every edge of r₁
+    is reachable (possibly in multiple steps) in r₂. -/
+lemma ayclicMono_trans
+    {r₁ r₂ : SetRel Event Event}
+    (hacyc : SetRel.Acyclic r₂)
+    (hsub : ∀ a b, (a, b) ∈ r₁ → (a, b) ∈ SetRel.TransGen r₂) :
+    SetRel.Acyclic r₁ := by
+  unfold SetRel.Acyclic at *
+  intro a ha
+  simp only [SetRel.TransGen, Set.mem_setOf_eq] at *
+  apply hacyc a
+  exact Relation.TransGen.closed (fun x y h => hsub x y h) ha
+
 --- tso : Relation.TransGen
 ---   (Rel.po evts ∩ (prod W W ∪ prod R (R ∪ W)) ∪ union (external evts ∪ Rel.rf evts) (co evts ∪ Rel.fr evts co)) x x
 --- ⊢ Relation.TransGen (fun x y => (Rel.rf evts x y ∨ co evts x y ∨ Rel.fr evts co x y) ∨ Rel.po evts x y) ?x ?x
@@ -186,9 +199,9 @@ theorem rf_fr_subset_co
   {evts : Events}
   (X : CandidateExecution evts)
   (w r w' : Event)
-  (hrf : (w, r) ∈ X.rf)
+  (hrf : (w, r) ∈ X.rf')
   (hfr : (r, w') ∈ X.fr) :
-  (w, w') ∈ X.co := by
+  (w, w') ∈ X.co' := by
   simp only [CandidateExecution.fr] at hfr
   obtain ⟨w₁, h₁, h₂⟩ := hfr
   simp only [SetRel.inv] at h₁
@@ -199,8 +212,8 @@ theorem rf_fr_subset_co
 theorem co_acyclic
   {evts : Events}
   (X : CandidateExecution evts) :
-  SetRel.Acyclic X.co := by
-  let r : Rel Event Event := fun e₁ e₂ => (e₁, e₂) ∈ X.co
+  SetRel.Acyclic X.co' := by
+  let r : Rel Event Event := fun e₁ e₂ => (e₁, e₂) ∈ X.co'
   have hiso : IsStrictOrder Event r :=
     { irrefl := fun e h => X.preCo.irrefl e h
       trans  := fun a b c hab hbc => X.preCo.trans a b c hab hbc }
@@ -216,7 +229,7 @@ theorem fr_co_subset_fr
   (X : CandidateExecution evts)
   (r w w' : Event)
   (hfr : (r, w) ∈ X.fr)
-  (hco : (w, w') ∈ X.co) :
+  (hco : (w, w') ∈ X.co') :
   (r, w') ∈ X.fr := by
   simp only [CandidateExecution.fr] at *
   obtain ⟨w₀, h_inv, h_co⟩ := hfr

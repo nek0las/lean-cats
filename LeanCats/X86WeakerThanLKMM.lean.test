@@ -1,0 +1,640 @@
+import LeanCats.Macro
+import LeanCats.Data
+import LeanCats.Relations
+import LeanCats.Theorems
+import LeanCats.Basic
+
+open CatRel Data Relation
+
+-- ════════════════════════════════════════════════════════════════
+-- § Helper definitions
+-- ════════════════════════════════════════════════════════════════
+
+private abbrev tso_rel {evts : Events} (X : CandidateExecution evts) : SetRel Event Event :=
+  tso_x86.implied evts X ∪ tso_x86.xppo evts X ∪ rfe evts X ∪ X.fr ∪ X.co
+
+private abbrev coh_rel {evts : Events} (X : CandidateExecution evts) : SetRel Event Event :=
+  po_loc evts X ∪ X.rf ∪ X.co ∪ X.fr
+
+private abbrev tso_step {evts : Events} (X : CandidateExecution evts) :=
+  fun (a b : Event) => (a, b) ∈ tso_rel X
+
+private abbrev coh_step {evts : Events} (X : CandidateExecution evts) :=
+  fun (a b : Event) => (a, b) ∈ coh_rel X
+
+-- ════════════════════════════════════════════════════════════════
+-- § Lemmas: coherence edges into TSO
+-- ════════════════════════════════════════════════════════════════
+
+private lemma co_tso {evts : Events} (X : CandidateExecution evts)
+    {a b : Event} (h : (a, b) ∈ X.co) : tso_step X a b :=
+  Or.inr h
+
+private lemma fr_tso {evts : Events} (X : CandidateExecution evts)
+    {a b : Event} (h : (a, b) ∈ X.fr) : tso_step X a b :=
+  Or.inl (Or.inl (Or.inl (Or.inr h)))
+
+private lemma rfe_tso {evts : Events} (X : CandidateExecution evts)
+    {a b : Event} (hrf : (a, b) ∈ X.rf) (hext : a.t_id ≠ b.t_id) :
+    tso_step X a b := by
+  apply Or.inl; apply Or.inl; apply Or.inr
+  simp [rfe, Rel.external, Rel.internal]
+  exact ⟨hrf, hext⟩
+
+private lemma xppo_tso {evts : Events} (X : CandidateExecution evts)
+    {a b : Event} (hpo : (a, b) ∈ X.po)
+    (hk : (a.effect.op = Op.write ∧ b.effect.op = Op.write) ∨
+          (a.effect.op = Op.read  ∧ b.effect.op = Op.write) ∨
+          (a.effect.op = Op.read  ∧ b.effect.op = Op.read)) :
+    tso_step X a b := by
+  apply Or.inl; apply Or.inl; apply Or.inl; apply Or.inr
+  simp [tso_x86.xppo, CatRel.prod, Set.prod, CatRel.W, CatRel.R,
+        CatRel.CatUnion.union, SetRel.union, Data.writes, Data.reads]
+  exact ⟨by rcases hk with ⟨h1,h2⟩|⟨h1,h2⟩|⟨h1,h2⟩
+         · exact Or.inl ⟨h1,h2⟩
+         · exact Or.inr (Or.inl ⟨h1,h2⟩)
+         · exact Or.inr (Or.inr ⟨h1,h2⟩), hpo⟩
+
+-- ════════════════════════════════════════════════════════════════
+-- § rf/co helpers
+-- ════════════════════════════════════════════════════════════════
+
+private lemma rf_is_write {evts : Events} (X : CandidateExecution evts)
+    {w r : Event} (h : (w, r) ∈ X.rf) : w.effect.op = Op.write :=
+  (X.rfInst.wellTyped w r h).1
+
+private lemma rf_is_read {evts : Events} (X : CandidateExecution evts)
+    {w r : Event} (h : (w, r) ∈ X.rf) : r.effect.op = Op.read :=
+  (X.rfInst.wellTyped w r h).2.1
+
+private lemma rf_same_loc {evts : Events} (X : CandidateExecution evts)
+    {w r : Event} (h : (w, r) ∈ X.rf) : w.effect.location = r.effect.location :=
+  (X.rfInst.wellTyped w r h).2.2.1
+
+private lemma co_is_write_left {evts : Events} (X : CandidateExecution evts)
+    {a b : Event} (h : (a, b) ∈ X.co) : a.effect.op = Op.write :=
+  (X.preCo.preco.wellTyped a b h).2.2.1
+
+private lemma co_is_write_right {evts : Events} (X : CandidateExecution evts)
+    {a b : Event} (h : (a, b) ∈ X.co) : b.effect.op = Op.write :=
+  (X.preCo.preco.wellTyped a b h).2.2.2.1
+
+-- fr source is a read (since fr = rf⁻¹;co, the source is an rf target)
+private lemma fr_is_read {evts : Events} (X : CandidateExecution evts)
+    {r w : Event} (h : (r, w) ∈ X.fr) : r.effect.op = Op.read := by
+  simp only [CandidateExecution.fr] at h
+  obtain ⟨w', hinv, _⟩ := h
+  simp only [SetRel.inv] at hinv
+  exact rf_is_read X hinv
+
+private lemma fr_is_write {evts : Events} (X : CandidateExecution evts)
+    {r w : Event} (h : (r, w) ∈ X.fr) : w.effect.op = Op.write := by
+  simp only [CandidateExecution.fr] at h
+  obtain ⟨w', _, hco⟩ := h
+  exact co_is_write_right X hco
+
+-- coWR-based: po(w,r) + sameloc + fr(r,w') → co(w,w')
+private lemma po_fr_to_co {evts : Events} (X : CandidateExecution evts)
+    {w r w' : Event}
+    (hpo : (w, r) ∈ X.po) (hloc : w.effect.location = r.effect.location)
+    (hfr : (r, w') ∈ X.fr) : (w, w') ∈ X.co := by
+  simp only [CandidateExecution.fr] at hfr
+  obtain ⟨w'', hinv, hco⟩ := hfr
+  simp only [SetRel.inv] at hinv
+  rcases X.coWR w r w'' hpo hloc hinv with h | h
+  · exact X.preCo.trans w w'' w' h hco
+  · rw [h]; exact hco
+
+-- ════════════════════════════════════════════════════════════════
+-- § State machine for processing a coherence path
+--
+-- We process a TransGen(coh) path starting from a write.
+-- The "state" tracks whether we have a pending write-to-read
+-- edge that hasn't been emitted as a TSO step yet.
+--
+-- Invariant I(origin, w, cur):
+--   TransGen(tso) origin w ∧ po(w, cur) ∧ sameloc ∧ w∈W ∧ cur∈R
+--   (or w = cur if cur is a write and TransGen(tso) origin cur)
+-- ════════════════════════════════════════════════════════════════
+
+/-- The "state" after processing a prefix of the coherence path.
+    - `origin` is the starting write of the cycle.
+    - `AtWrite w`: we have TransGen(tso) origin w, and w is the current position (a write).
+    - `PendingRead w r`: we have TransGen(tso) origin w, with po(w,r), sameloc, w∈W, r∈R.
+      r is the current position (a read).
+    Note: in both cases, if origin = w, we use TransGen (at least one step).
+    We handle the "no steps yet" case separately. -/
+
+-- For the formal proof, we track: given TransGen(coh) a b with a a write,
+-- produce (w, state) where state tracks whether b is write-reachable
+-- via TransGen(tso) or pending.
+
+-- Let's simplify and just prove: TransGen(coh) a a with a a write → False.
+
+-- We'll do this by defining a well-founded measure on events.
+-- The measure: the unique id of the event, which decreases along po.
+-- But co/fr/rf can go in any direction w.r.t. ids...
+
+-- OK let me just code it up directly with TransGen induction.
+
+-- The main lemma uses the following state:
+-- Given TransGen(coh) w₀ b with w₀ a write,
+-- ∃ w, (w₀ = w ∨ TransGen(tso) w₀ w) ∧
+--      (w = b ∨ (po(w,b) ∧ sameloc ∧ w∈W ∧ b∈R))
+
+-- I.e., either we've reached b via tso, or we have a pending write w
+-- po-before b.
+
+-- State type
+private inductive PathState {evts : Events} (X : CandidateExecution evts) (origin : Event) (cur : Event) : Prop where
+  | atWrite (w : Event) :
+      (origin = w ∨ TransGen (tso_step X) origin w) →
+      w = cur →
+      PathState X origin cur
+  | pendingRead (w : Event) :
+      (origin = w ∨ TransGen (tso_step X) origin w) →
+      (w, cur) ∈ X.po →
+      w.effect.location = cur.effect.location →
+      w.effect.op = Op.write →
+      cur.effect.op = Op.read →
+      PathState X origin cur
+
+-- Process a single coh edge from PathState
+private lemma step_state {evts : Events} (X : CandidateExecution evts)
+    {origin cur next : Event}
+    (hstate : PathState X origin cur)
+    (hedge : coh_step X cur next) :
+    PathState X origin next := by
+  simp only [coh_step, coh_rel, CatRel.CatUnion.union, SetRel.union, Set.mem_setOf_eq] at hedge
+  rcases hstate with ⟨w, hw_reach, hw_eq⟩ | ⟨w, hw_reach, hpo_wc, hloc_wc, hw_write, hc_read⟩
+  · -- AtWrite: w = cur, cur is a write
+    subst hw_eq
+    rcases hedge with ((hpo_loc | hrf) | hco) | hfr
+    · -- po_loc(w, next)
+      simp only [po_loc, Set.mem_inter_iff, Rel.location, Set.mem_setOf_eq] at hpo_loc
+      obtain ⟨hpo, hloc⟩ := hpo_loc
+      -- w is a write. What is next?
+      -- We don't know next's op directly. Let's case-split.
+      by_cases hn_read : next.effect.op = Op.read
+      · -- W*R po_loc: pending state
+        exact PathState.pendingRead w hw_reach hpo hloc hw_write hn_read
+      · -- W*W (or fence/branch, but we treat as write for xppo)
+        have hn_write : next.effect.op = Op.write := by
+          cases next.effect.op <;> simp_all
+        have htso := xppo_tso X hpo (Or.inl ⟨hw_write, hn_write⟩)
+        exact PathState.atWrite next
+          (Or.inr (hw_reach.elim (fun h => h ▸ TransGen.single htso)
+                                  (fun h => h.tail htso)))
+          rfl
+    · -- rf(w, next): w is write, next is read
+      have hn_read := rf_is_read X hrf
+      by_cases hext : w.t_id ≠ next.t_id
+      · -- rfe: tso step, arrive at read
+        -- After rfe, next is a read. We don't have a pending write po-before next.
+        -- But we DO have TransGen(tso) origin next.
+        -- We need to continue from next (a read).
+        -- From a read, the next coh edge will be fr or po_loc (all in tso from a read).
+        -- But our state needs to be either AtWrite or PendingRead.
+        -- next is a read, so we can't be AtWrite.
+        -- For PendingRead, we'd need a write po-before next at same loc.
+        -- We have rf(w, next) which is rfe. w and next are different threads.
+        -- So po(w, next) is false (po requires same thread).
+        -- Hmm. We need a different state for "arrived at read via rfe".
+        -- But every edge from a read is in tso, so the next step will resolve this.
+        -- Let me handle this by making AtWrite work for reads too, or adding a third state.
+        -- Actually: after rfe(w, next), the next edge from next (a read) will be
+        -- fr, po_loc(RW), or po_loc(RR). All are xppo or fr, i.e., tso steps.
+        -- So we can EAGERLY look ahead... but we're processing one edge at a time.
+        -- Let me add an AtRead state.
+        sorry
+      · -- rfi: pending state via rfiPo
+        push_neg at hext
+        have hpo := X.rfiPo w next hrf hext
+        exact PathState.pendingRead w hw_reach hpo (rf_same_loc X hrf) hw_write hn_read
+    · -- co(w, next): tso step
+      have hn_write := co_is_write_right X hco
+      exact PathState.atWrite next
+        (Or.inr (hw_reach.elim (fun h => h ▸ TransGen.single (co_tso X hco))
+                                (fun h => h.tail (co_tso X hco))))
+        rfl
+    · -- fr(w, next): w must be a read for fr, but w is a write. Contradiction.
+      have := fr_is_read X hfr
+      simp [hw_write] at this
+  · -- PendingRead: w is a write, cur is a read, po(w, cur), sameloc
+    rcases hedge with ((hpo_loc | hrf) | hco) | hfr
+    · -- po_loc(cur, next): cur is read
+      simp only [po_loc, Set.mem_inter_iff, Rel.location, Set.mem_setOf_eq] at hpo_loc
+      obtain ⟨hpo_cn, hloc_cn⟩ := hpo_loc
+      by_cases hn_read : next.effect.op = Op.read
+      · -- R*R po_loc: extend pending state
+        have hpo_wn := X.prePo w cur next hpo_wc hpo_cn
+        have hloc_wn : w.effect.location = next.effect.location := by
+          rw [hloc_wc, hloc_cn]
+        exact PathState.pendingRead w hw_reach hpo_wn hloc_wn hw_write hn_read
+      · -- R*W po_loc: resolve pending → xppo(WW)
+        have hn_write : next.effect.op = Op.write := by
+          cases next.effect.op <;> simp_all
+        have hpo_wn := X.prePo w cur next hpo_wc hpo_cn
+        have htso := xppo_tso X hpo_wn (Or.inl ⟨hw_write, hn_write⟩)
+        exact PathState.atWrite next
+          (Or.inr (hw_reach.elim (fun h => h ▸ TransGen.single htso)
+                                  (fun h => h.tail htso)))
+          rfl
+    · -- rf(cur, next): cur is read, rf needs write source. Contradiction.
+      have := rf_is_write X hrf
+      simp [hc_read] at this
+    · -- co(cur, next): cur is read, co needs write source. Contradiction.
+      have := co_is_write_left X hco
+      simp [hc_read] at this
+    · -- fr(cur, next): resolve pending → co via coWR
+      have hn_write := fr_is_write X hfr
+      have hco := po_fr_to_co X hpo_wc hloc_wc hfr
+      have htso := co_tso X hco
+      exact PathState.atWrite next
+        (Or.inr (hw_reach.elim (fun h => h ▸ TransGen.single htso)
+                                (fun h => h.tail htso)))
+        rfl
+
+-- Ugh, the rfe case breaks the two-state machine. Let me add a third state.
+
+-- Actually, I realize there's a much simpler fix: after rfe(w, next),
+-- I can look at the rf(w, next) and create a "virtual" pending state.
+-- Even though w and next are on different threads, w.loc = next.loc (from rf),
+-- and we just need to handle the next edge from next appropriately.
+-- BUT: PendingRead requires po(w, next), which needs same thread.
+-- And coWR also requires po.
+
+-- The key realization: after rfe, the read `next` is on a DIFFERENT thread from w.
+-- We've emitted a tso step (rfe) to reach `next`.
+-- From `next`, every edge is in tso (since next is a read).
+-- So we can treat `next` as if we're at AtWrite(next) except next is a read.
+-- The issue is AtWrite assumes cur is a write.
+
+-- Let me generalize AtWrite to AtEvent, allowing reads too.
+-- Then from AtEvent(cur) with cur a read, the next edge is:
+-- - fr: tso step → AtEvent(next) with next a write
+-- - po_loc(R,W): xppo(RW) tso step → AtEvent(next) write
+-- - po_loc(R,R): xppo(RR) tso step → AtEvent(next) read (stays AtEvent)
+-- - rf: impossible (cur is read)
+-- - co: impossible (cur is read)
+
+-- For the cycle closure: if cur = origin and origin is a write,
+-- AtEvent with cur being origin works.
+-- PendingRead with cur being origin: origin is a write, but PendingRead needs cur∈R. Contradiction.
+
+-- So let me redefine the state:
+
+end -- close the section to redefine
+
+-- Clean restart with three cases
+
+-- I'll use a simple two-state approach:
+-- State1: ∃ w, (origin=w ∨ TG tso origin w) ∧ w=cur  [at any event]
+-- State2: ∃ w, (origin=w ∨ TG tso origin w) ∧ po(w,cur) ∧ sameloc ∧ w∈W ∧ cur∈R  [pending]
+
+-- State1 at origin (a write) → TG tso origin origin → contradiction with hTso
+-- State2 at origin → origin∈R, but origin∈W → contradiction
+
+-- Processing edges from State1 (cur = w):
+-- co(w,next): TG tso step → State1(next)
+-- fr(w,next): w must be read (fr source is read). If w is write → impossible unless...
+--   Actually w can be anything in State1. If w is a write, fr(w,next) means write is in fr.
+--   fr = rf⁻¹;co, source of fr is rf target = read. So w must be read. If w is write, impossible.
+--   If w is a read: fr → tso step → State1(next)
+-- po_loc(w,next):
+--   If w is write and next is read: → State2(w, next)
+--   If w is write and next is write: xppo(WW) → State1(next)
+--   If w is read and next is write: xppo(RW) → State1(next)
+--   If w is read and next is read: xppo(RR) → State1(next)
+-- rf(w,next):
+--   w must be write (rf source).
+--   next is read (rf target).
+--   If same thread (rfi): rfiPo → po(w,next) → State2(w, next)
+--   If diff thread (rfe): tso step → State1(next)  [next is a read, that's OK for State1]
+
+-- Processing edges from State2 (pending write w, cur is read):
+-- fr(cur,next): po_fr_to_co → co(w,next) → tso step → State1(next)
+-- po_loc(cur,next):
+--   If next is read: RR, extend pending: po(w,next) by transitivity → State2(w, next)
+--   If next is write: RW, po(w,next) by transitivity → xppo(WW) → State1(next)
+-- rf(cur,next): cur is read, rf source must be write → impossible
+-- co(cur,next): cur is read, co source must be write → impossible
+
+-- This works! State1 allows cur to be any event type. The only issue is:
+-- At cycle closure (cur = origin, a write):
+-- State1: origin = w ∨ TG tso origin w. Since w = cur = origin: origin = origin (trivial) or TG tso origin origin.
+--   If origin = origin: no tso steps emitted. Need to show this can't happen in a cycle.
+--   If TG tso origin origin: contradiction with hTso.
+-- State2: origin ∈ R but origin ∈ W: contradiction.
+
+-- For the "no tso steps" case: this means every edge in the cycle was
+-- either rfi (→ State2) or WR po_loc (→ State2). But State2 is resolved only by
+-- fr or RW po_loc, which emit tso steps. So if no tso steps were emitted,
+-- the cycle never entered State2. But rfi and WR po_loc both go to State2.
+-- So the cycle has NO rfi and NO WR po_loc edges.
+-- The remaining edges (co, fr, rfe, WW/RW/RR po_loc) all emit tso steps.
+-- So every edge emits a tso step → at least one step.
+-- But we said no tso steps... contradiction with the cycle having ≥1 edge.
+
+-- More precisely: in a cycle (TransGen, so ≥1 edge), every edge either emits a tso step
+-- or goes to State2 (which will be resolved by a later tso-emitting edge).
+-- If the very first edge emits a tso step, we're done (TG tso origin w ≠ origin).
+-- If the very first edge goes to State2, then some later edge resolves it (emitting tso).
+
+-- Formally, I'll track (origin = w ∨ TransGen tso origin w) and show that for cycles,
+-- it must be the TransGen case.
+
+-- Actually, a simpler approach: track ReflTransGen instead of (= ∨ TransGen),
+-- and separately argue that the result is TransGen (non-trivial).
+-- To argue non-triviality: the cycle has ≥1 edge. If the final state is State1(origin)
+-- with origin = w, then ReflTransGen tso origin origin. But we need TransGen.
+-- We can show: if the cycle has ≥2 edges, at least one emits a tso step.
+-- Or: handle the 1-edge cycle separately.
+
+-- 1-edge cycle: TransGen.single (coh_step origin origin). So (origin, origin) ∈ coh_rel.
+-- - co(origin, origin): co irreflexive → impossible.
+-- - fr(origin, origin): fr = rf⁻¹;co. rf(w, origin), co(w, origin) for some w.
+--   But also rf(w, origin) means origin is a read. origin is a write → impossible.
+-- - rf(origin, origin): rf(origin, origin) means origin is both write and read → impossible
+--   (or: rf well-typed says r.id ≠ w.id, so origin.id ≠ origin.id → impossible).
+-- - po_loc(origin, origin): po(origin, origin) means origin.id < origin.id → impossible.
+-- So 1-edge cycles are impossible.
+
+-- So for ≥2 edges, at least one edge emits a tso step.
+
+-- Great! Let me implement this.
+
+private inductive CohState {evts : Events} (X : CandidateExecution evts)
+    (origin : Event) (cur : Event) : Prop where
+  | atEvent (w : Event) :
+      ReflTransGen (tso_step X) origin w →
+      w = cur →
+      CohState X origin cur
+  | pendingRead (w : Event) :
+      ReflTransGen (tso_step X) origin w →
+      (w, cur) ∈ X.po →
+      w.effect.location = cur.effect.location →
+      w.effect.op = Op.write →
+      cur.effect.op = Op.read →
+      CohState X origin cur
+
+private lemma coh_state_step {evts : Events} (X : CandidateExecution evts)
+    {origin cur next : Event}
+    (hstate : CohState X origin cur)
+    (hedge : coh_step X cur next) :
+    CohState X origin next := by
+  simp only [coh_step, coh_rel, CatRel.CatUnion.union, SetRel.union, Set.mem_setOf_eq] at hedge
+  rcases hstate with ⟨w, hw_path, hw_eq⟩ | ⟨w, hw_path, hpo_wc, hloc_wc, hw_write, hc_read⟩
+  · -- AtEvent: w = cur
+    subst hw_eq
+    rcases hedge with ((hpo_loc | hrf) | hco) | hfr
+    · -- po_loc
+      simp only [po_loc, Set.mem_inter_iff, Rel.location, Set.mem_setOf_eq] at hpo_loc
+      obtain ⟨hpo, hloc⟩ := hpo_loc
+      by_cases hw_w : w.effect.op = Op.write
+      · by_cases hn_r : next.effect.op = Op.read
+        · exact CohState.pendingRead w hw_path hpo hloc hw_w hn_r
+        · have hn_w : next.effect.op = Op.write := by cases next.effect.op <;> simp_all
+          exact CohState.atEvent next (hw_path.tail (xppo_tso X hpo (Or.inl ⟨hw_w, hn_w⟩))) rfl
+      · -- w is a read (or fence/branch, treat as read for xppo)
+        by_cases hw_r : w.effect.op = Op.read
+        · by_cases hn_w : next.effect.op = Op.write
+          · exact CohState.atEvent next (hw_path.tail (xppo_tso X hpo (Or.inr (Or.inl ⟨hw_r, hn_w⟩)))) rfl
+          · by_cases hn_r : next.effect.op = Op.read
+            · exact CohState.atEvent next (hw_path.tail (xppo_tso X hpo (Or.inr (Or.inr ⟨hw_r, hn_r⟩)))) rfl
+            · -- next is fence/branch, treat as write
+              have hn_w : next.effect.op = Op.write := by cases next.effect.op <;> simp_all
+              exact CohState.atEvent next (hw_path.tail (xppo_tso X hpo (Or.inr (Or.inl ⟨hw_r, hn_w⟩)))) rfl
+        · -- w is fence/branch, treat as write for xppo
+          have hw_w : w.effect.op = Op.write := by cases w.effect.op <;> simp_all
+          exact absurd hw_w hw_w  -- contradiction with hw_w above
+          -- Actually: hw_w was ¬(w.effect.op = Op.write) and we derived w.effect.op = Op.write.
+          -- That's the contradiction.
+    · -- rf
+      by_cases hext : w.t_id ≠ next.t_id
+      · exact CohState.atEvent next (hw_path.tail (rfe_tso X hrf hext)) rfl
+      · push_neg at hext
+        have hw_w := rf_is_write X hrf
+        have hn_r := rf_is_read X hrf
+        exact CohState.pendingRead w hw_path (X.rfiPo w next hrf hext)
+          (rf_same_loc X hrf) hw_w hn_r
+    · -- co
+      exact CohState.atEvent next (hw_path.tail (co_tso X hco)) rfl
+    · -- fr
+      exact CohState.atEvent next (hw_path.tail (fr_tso X hfr)) rfl
+  · -- PendingRead: w is write, cur is read, po(w, cur), sameloc
+    rcases hedge with ((hpo_loc | hrf) | hco) | hfr
+    · -- po_loc(cur, next)
+      simp only [po_loc, Set.mem_inter_iff, Rel.location, Set.mem_setOf_eq] at hpo_loc
+      obtain ⟨hpo_cn, hloc_cn⟩ := hpo_loc
+      by_cases hn_r : next.effect.op = Op.read
+      · -- RR: extend pending
+        exact CohState.pendingRead w hw_path
+          (X.prePo w cur next hpo_wc hpo_cn)
+          (by rw [hloc_wc, hloc_cn]) hw_write hn_r
+      · -- RW: resolve pending
+        have hn_w : next.effect.op = Op.write := by cases next.effect.op <;> simp_all
+        have hpo_wn := X.prePo w cur next hpo_wc hpo_cn
+        exact CohState.atEvent next
+          (hw_path.tail (xppo_tso X hpo_wn (Or.inl ⟨hw_write, hn_w⟩))) rfl
+    · -- rf(cur, next): cur is read, rf source is write → contradiction
+      have := rf_is_write X hrf
+      simp [hc_read] at this
+    · -- co(cur, next): cur is read, co source is write → contradiction
+      have := co_is_write_left X hco
+      simp [hc_read] at this
+    · -- fr(cur, next): resolve pending via coWR
+      have hco := po_fr_to_co X hpo_wc hloc_wc hfr
+      exact CohState.atEvent next (hw_path.tail (co_tso X hco)) rfl
+
+-- Apply the state machine to the full TransGen path
+private lemma coh_transgen_state {evts : Events} (X : CandidateExecution evts)
+    {a b : Event}
+    (hpath : TransGen (coh_step X) a b) :
+    CohState X a b := by
+  have hinit : CohState X a a := CohState.atEvent a ReflTransGen.refl rfl
+  induction hpath with
+  | single h => exact coh_state_step X hinit h
+  | tail _ hlast ih => exact coh_state_step X ih hlast
+
+-- The key: for a cycle, extract TransGen(tso) from the state
+private lemma coh_cycle_gives_tso_cycle {evts : Events} (X : CandidateExecution evts)
+    {a : Event}
+    (hcycle : TransGen (coh_step X) a a)
+    (ha_write : a.effect.op = Op.write) :
+    TransGen (tso_step X) a a := by
+  have hstate := coh_transgen_state X hcycle
+  rcases hstate with ⟨w, hw_path, hw_eq⟩ | ⟨w, hw_path, hpo, _, _, ha_read⟩
+  · -- AtEvent: w = a, ReflTransGen(tso) a w = a
+    subst hw_eq
+    -- hw_path : ReflTransGen (tso_step X) a a
+    -- We need TransGen. ReflTransGen is either refl or TransGen.
+    rcases hw_path.cases_head with h | ⟨b, hab, hba⟩
+    · -- Refl: no tso steps emitted. Show this is impossible.
+      -- In a cycle with ≥1 edge, at least one step must emit a tso edge.
+      -- A 1-edge cycle is impossible (shown below).
+      -- For ≥2 edges, at least one emits a tso step.
+      -- But we need a cleaner argument. Let's show the 1-edge case is impossible.
+      exfalso
+      -- The cycle has ≥1 edge. Process the first edge.
+      -- If the first edge emits a tso step, ReflTransGen would be non-trivial.
+      -- So the first edge must NOT emit a tso step.
+      -- Non-tso-emitting edges from a write: rfi (→ PendingRead), WR po_loc (→ PendingRead)
+      -- After PendingRead, the state is resolved by a later edge (emitting tso).
+      -- But the resolved state has a non-trivial ReflTransGen. Contradiction with hw_path being refl.
+      -- Let me show this more carefully.
+      -- Since ReflTransGen(tso) a a is exactly refl (no steps), every edge in the cycle
+      -- is "absorbed" without emitting tso. But:
+      -- From AtEvent(a), first edge:
+      --   rfi → PendingRead(a, r) with ReflTransGen.refl
+      --   WR po_loc → PendingRead(a, r) with ReflTransGen.refl
+      --   Any other → emits tso step, ReflTransGen ≠ refl. Contradiction.
+      -- From PendingRead, the edge must be fr or RW po_loc or RR po_loc.
+      --   fr → emits tso step (co via coWR). Contradiction.
+      --   RW po_loc → emits tso step (xppo). Contradiction.
+      --   RR po_loc → PendingRead with same ReflTransGen. No emission.
+      -- So the only non-emitting pattern is: (rfi or WR po_loc), then RR po_loc*, then...
+      -- But eventually we must return to a (a write). The exit from PendingRead to a write
+      -- is either fr or RW po_loc, both of which emit.
+      -- So at least one tso step is emitted. Contradiction.
+      -- Formal proof: induction on the cycle.
+      -- Actually, this is complex. Let me prove it differently.
+      -- Claim: coh_rel has no self-loops. I.e., (a,a) ∉ coh_rel.
+      -- Then a 1-edge cycle is impossible.
+      -- For ≥2 edges, I'll show the state machine always emits ≥1 tso step.
+      -- But this requires a separate induction...
+      -- Alternatively: use a DIFFERENT invariant that tracks TransGen directly.
+      -- I.e., after at least one tso-emitting edge, switch to TransGen.
+      -- This is doable but requires more cases.
+      -- For now, let me prove it by showing that a ReflTransGen.refl result
+      -- from a cycle is impossible.
+      -- Process the cycle: TransGen(coh) a a. Unfold the first step.
+      rcases hcycle with ⟨h_single⟩ | @⟨_, mid, hrest, hlast⟩
+      · -- Single edge: (a, a) ∈ coh_rel.
+        -- co(a,a): irrefl. fr(a,a): need rf(w,a) and co(w,a), but also a is write.
+        -- rf(a,a): a.id ≠ a.id. po_loc(a,a): a.id < a.id.
+        simp only [coh_step, coh_rel, CatRel.CatUnion.union, SetRel.union, Set.mem_setOf_eq] at h_single
+        rcases h_single with ((hpo_loc | hrf) | hco) | hfr
+        · simp only [po_loc, Set.mem_inter_iff] at hpo_loc
+          obtain ⟨hpo, _⟩ := hpo_loc
+          simp only [Events.po, Set.mem_setOf_eq] at hpo
+          exact Nat.lt_irrefl _ hpo.2.2.2
+        · have := (X.rfInst.wellTyped a a hrf).2.2.2
+          exact this rfl
+        · exact X.preCo.irrefl a hco
+        · have hr := fr_is_read X hfr
+          simp [ha_write] at hr
+      · -- ≥2 edges: TransGen(coh) a mid, then (mid, a) ∈ coh
+        -- We have coh_transgen_state on the full cycle giving refl.
+        -- But the sub-path a → mid also gives a state.
+        have hstate_mid := coh_transgen_state X hrest
+        -- Now process the last edge (mid, a) from hstate_mid.
+        have hstate_final := coh_state_step X hstate_mid hlast
+        -- hstate_final should be the same as our overall state.
+        -- Our overall state was AtEvent(a) with ReflTransGen.refl.
+        -- Let's check: hstate_final is CohState X a a.
+        -- If it's AtEvent(w) with w = a and ReflTransGen tso a w:
+        --   We need ReflTransGen tso a a. If non-trivial → contradiction.
+        --   Actually this IS our assumption (refl case). So hstate_final might also be refl.
+        -- Hmm, this doesn't directly help.
+        -- Let me try a different approach: show directly that in the cycle,
+        -- the state_mid at mid must involve a non-trivial path if mid ≠ a,
+        -- or a pending read state.
+        -- This is getting too complex inline. Let me prove a separate lemma
+        -- that ReflTransGen can be upgraded to TransGen when the cycle has ≥2 edges.
+        -- Actually, the simplest approach: use a stronger state that tracks
+        -- whether at least one tso step has been emitted.
+        sorry
+    · exact ReflTransGen.head hab hba |>.transGen_of_reflTransGen_of_ne (by
+        intro heq; subst heq
+        -- This means we went a → b → ... → a with tso steps.
+        -- We have hab : tso_step X a b and hba : ReflTransGen tso b a
+        -- We need to show this is impossible... but it's not, it's exactly what we want!
+        sorry)
+      -- This approach isn't working cleanly. Let me restructure.
+      sorry
+  · -- PendingRead: a is read. But a is a write. Contradiction.
+    simp [ha_write] at ha_read
+
+-- OK the above is getting messy. Let me use a cleaner approach.
+-- Track `TransGen` directly by handling the first edge specially.
+
+-- CLEAN APPROACH: Process edges one by one, with state being either:
+-- (a) ∃ w, TransGen(tso) origin w ∧ (w = cur ∨ pending(w, cur))
+-- (b) origin = cur ∧ no tso steps yet (initial state, before first tso-emitting edge)
+-- (c) pending(origin, cur) ∧ no tso steps yet
+
+-- When we emit the first tso step, we move from (b)/(c) to (a).
+-- At cycle end, we must be in (a) with w = origin → TransGen tso origin origin.
+-- Being in (b) means origin = cur = origin with no steps → need to show impossible (cycle has ≥1 edge).
+-- Being in (c) means pending(origin, origin) → origin is read, contradiction.
+
+-- Let me formalize this with a single inductive type.
+
+-- Actually, you know what, let me just use a completely different proof structure.
+-- Instead of state machine processing, prove it via well-founded induction.
+
+-- SIMPLEST POSSIBLE APPROACH:
+-- Define wco(a,b) = either:
+--   (1) (a,b) ∈ tso_rel, or
+--   (2) ∃ mid, (a, mid) ∈ rfi, (mid, b) ∈ coh_rel  [rfi;coh single step]
+--   (3) ∃ mid, (a, mid) ∈ WR po_loc, (mid, b) ∈ coh_rel  [WR po_loc;coh single step]
+-- Then show:
+--   (A) coh_rel ⊆ TransGen(wco)
+--   (B) wco ⊆ TransGen(tso_rel)
+-- This gives Acyclic(tso) → Acyclic(wco) via ayclicMono_trans → Acyclic(coh) via another ayclicMono_trans.
+
+-- For (B), each wco edge:
+-- Case 1: trivially in TransGen(tso).
+-- Case 2: rfi(a,mid);coh(mid,b).
+--   mid is a read.
+--   coh(mid,b) cases:
+--   - fr(mid,b): rf_fr_subset_co → co(a,b) → tso single step ✓
+--   - po_loc(mid,b) with RW: po trans (rfiPo) → xppo(WW) ✓
+--   - po_loc(mid,b) with RR: po trans → po(a,b) with WR... this gives WR po_loc(a,b).
+--     This is NOT in tso! So case 2 with RR po_loc doesn't map to single tso step.
+--     It would be wco case 3 (WR po_loc; next coh step)... but that's circular!
+-- Hmm, so rfi;(RR po_loc) = WR po_loc (after composition). And WR po_loc needs the NEXT
+-- edge to resolve. So we'd need wco to be rfi;coh;coh;...;coh until we hit a write.
+-- This requires unbounded composition.
+
+-- SO this simple approach doesn't work either. The issue is chains of reads.
+
+-- THE CORRECT SIMPLE APPROACH:
+-- Define wco(a,b) = ∃ chain of coh edges from a to b where a is a write and
+-- all intermediate events are reads at the same location in po order.
+-- This is essentially: a→(rfi|WR po_loc)→(RR po_loc)*→(fr|RW po_loc)→b
+-- And this maps to a single tso step (co or xppo).
+
+-- But this requires an existential over paths, which is hard to define as a relation.
+
+-- Alternative: use TransGen of a restricted relation.
+-- Let R = {(a,b) ∈ coh | a is read → b is read → same thread → po(a,b)}
+-- ... this is getting too convoluted.
+
+-- LET ME JUST PROVE THE THEOREM DIRECTLY WITH THE STATE MACHINE.
+-- I'll use a better state that distinguishes "some tso step emitted" from "no tso step yet".
+
+sorry  -- placeholder, will be replaced
+
+/-- TSO acyclicity implies LKMM coherence. -/
+theorem tso_implies_lkmm_coherence
+    (evts : Data.Events)
+    (X : CandidateExecution evts)
+    (hTso : tso_x86.tso evts X) :
+    lkmm.coherence evts X := by
+  sorry
+
+-- ════════════════════════════════════════════════════════════════
+-- § Remaining LKMM constraints
+-- ════════════════════════════════════════════════════════════════
+
+theorem tso_x86_subset_lkmm
+    (evts : Data.Events)
+    (X : CandidateExecution evts)
+    (hTso : tso_x86.tso evts X) :
+    lkmm.coherence evts X ∧
+    lkmm.atomic evts X ∧
+    lkmm.happens_before evts X ∧
+    lkmm.propagation evts X :=
+  ⟨tso_implies_lkmm_coherence evts X hTso, by sorry, by sorry, by sorry⟩
