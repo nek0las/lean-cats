@@ -32,7 +32,7 @@ by
   · rcases h with hxppo | h
     · exact Or.inl hxppo.2
     · rcases h with hrfe | h
-      · exact Or.inr (Or.inr (Or.inl hrfe.1))
+      · exact Or.inr (Or.inl hrfe.1)
       · rcases h with hfr | hco
         · exact Or.inr (Or.inr (Or.inl hfr))
         · exact Or.inr (Or.inr (Or.inr hco))
