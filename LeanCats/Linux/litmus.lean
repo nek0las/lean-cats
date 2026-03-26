@@ -42,7 +42,7 @@ instance : wellformed.co corr_evts corr_co where
   trans := by aesop
   preco := {
     wellTyped := by aesop
-    total := by candidateExecution_wf []
+    total := by candidateExecution_wf
   }
 
 /-- C CoRR+poonceonce+Once
@@ -64,28 +64,19 @@ Chosen rf edges: `p0wX -> p1r0` and `initWx -> p1r1`. -/
       aesop (add simp [corr_rf]))
 
 def corr_test : CandidateExecution corr_evts :=
-  @CandidateExecution.mk corr_evts
-    corr_evts
-    True
-    corr_po
-    (by candidateExecution_wf [corr_po])
-    corr_rf
-    corr_rfInst
-    corr_co
-    (inferInstance : wellformed.co corr_evts corr_co)
-    (∅ : SetRel Event Event)
-    (instWellformedRmwEmpty corr_evts)
-    (∅ : SetRel Event Event)
-    (∅ : SetRel Event Event)
-    (∅ : SetRel Event Event)
-    (∅ : SetRel Event Event)
-    (∅ : SetRel Event Event)
-    (∅ : SetRel Event Event)
-    (uniqueId_by_id corr_evts)
-    (by candidateExecution_wf [corr_rf])
-    (by
-      candidateExecution_wf [corr_rf, corr_co, corr_evts, Events.po, Events.all]
-      )
+  {
+    po' := corr_po
+    prePo := by candidateExecution_wf
+    rf' := corr_rf
+    rfInst := corr_rfInst
+    co' := corr_co
+    preRMW := instWellformedRmwEmpty corr_evts
+    uniqueId := uniqueId_by_id corr_evts
+    rfiPo := by
+      candidateExecution_wf
+    coWR := by
+      candidateExecution_wf
+  }
 
 theorem corr_FindCycle : ¬ (lkmm.coherence corr_evts corr_test) := by
   intro hacyc

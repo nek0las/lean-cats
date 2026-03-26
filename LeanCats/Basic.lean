@@ -57,13 +57,9 @@ theorem uniqueId_by_id (evts : Events) :
     user-supplied lemmas (typically the `co` and `evts` `@[simp]` definitions), then
     close by `omega` (handles numeric contradictions on IDs / thread IDs) with
     `simp_all` as a pre-processing step when `omega` alone is insufficient. -/
-macro "candidateExecution_wf" "[" lemmas:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
+macro "candidateExecution_wf" : tactic =>
   `(tactic|
-    (intros
-     simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Prod.mk.injEq,
-                Events.po, Events.all, Set.mem_setOf_eq, $lemmas,*] at *
-     first
-       | omega
+    (all_goals repeat first
        | aesop
-       | (simp_all [Set.mem_insert_iff, Set.mem_singleton_iff,
-                    Events.all, $lemmas,*] <;> omega)))
+       | (casesm _ ∈ _
+          aesop)))
