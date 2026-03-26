@@ -40,19 +40,8 @@ structure CandidateExecution (evts : Events) where
     → (w', r) ∈ rf'
     → (w, w') ∈ co' ∨ w = w'
 
-@[simp] abbrev CandidateExecution.po {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.po'
-@[simp] abbrev CandidateExecution.rf {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.rf'
-@[simp] abbrev CandidateExecution.co {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.co'
-@[simp] abbrev CandidateExecution.rmw {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.rmw'
-@[simp] abbrev CandidateExecution.wmb {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.wmb'
-@[simp] abbrev CandidateExecution.data {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.data'
-@[simp] abbrev CandidateExecution.addr {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.addr'
-@[simp] abbrev CandidateExecution.ctrl {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.ctrl'
-@[simp] abbrev CandidateExecution.fence {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.fence'
-@[simp] abbrev CandidateExecution.mb {evts : Events} (X : CandidateExecution evts) : SetRel Event Event := X.mb'
-
 /-- from-reads: always defined as rf⁻¹ ; co, so it is transparent to the kernel. -/
-@[simp] def CandidateExecution.fr {evts : Events} (X : CandidateExecution evts) : SetRel Event Event :=
+@[simp] def CandidateExecution.fr' {evts : Events} (X : CandidateExecution evts) : SetRel Event Event :=
   X.rf'.inv.comp X.co'
 
 /-- The `uniqueId` field of any `CandidateExecution`: since `event_id_unique` makes identity

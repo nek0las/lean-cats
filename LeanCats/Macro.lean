@@ -115,54 +115,54 @@ macro_rules
 
 macro_rules
   | `([predefined-relations| fr, $_, $X]) =>
-    let nm := mkIdent "fr".toName
+    let nm := mkIdent "fr'".toName
     `($X.$nm)
 
   | `([predefined-relations| po, $_, $X]) =>
-    let nm := mkIdent "po".toName
+    let nm := mkIdent "po'".toName
     `($X.$nm)
 
   | `([predefined-relations| rf, $_, $X]) =>
-    let nm := mkIdent "rf".toName
+    let nm := mkIdent "rf'".toName
     `($X.$nm)
 
   | `([predefined-relations| rmw, $_, $X]) =>
-    let nm := mkIdent "rmw".toName
+    let nm := mkIdent "rmw'".toName
     `($X.$nm)
 
   | `([predefined-relations| co, $_, $X]) =>
-    let co' := mkIdent "co".toName
+    let co' := mkIdent "co'".toName
     `($X.$co')
 
   | `([predefined-relations| id, $_, $_]) =>
     `(SetRel.id)
 
   | `([predefined-relations| data, $_, $X]) =>
-    let nm := mkIdent "data".toName
+    let nm := mkIdent "data'".toName
     `($X.$nm)
 
   | `([predefined-relations| addr, $_, $X]) =>
-    let nm := mkIdent "addr".toName
+    let nm := mkIdent "addr'".toName
     `($X.$nm)
 
   | `([predefined-relations| ctrl, $_, $X]) =>
-    let nm := mkIdent "ctrl".toName
+    let nm := mkIdent "ctrl'".toName
     `($X.$nm)
 
   | `([predefined-relations| wmb, $_, $X]) =>
-    let nm := mkIdent "wmb".toName
+    let nm := mkIdent "wmb'".toName
     `($X.$nm)
 
   | `([predefined-relations| fence, $_, $X]) =>
-    let nm := mkIdent "fence".toName
+    let nm := mkIdent "fence'".toName
     `($X.$nm)
 
   | `([predefined-relations| rmb , $_, $X]) =>
-    let nm := mkIdent "rmb".toName
+    let nm := mkIdent "rmb'".toName
     `($X.$nm)
 
   | `([predefined-relations| mb , $_, $X]) =>
-    let nm := mkIdent "mb".toName
+    let nm := mkIdent "mb'".toName
     `($X.$nm)
 
 macro_rules
@@ -329,7 +329,7 @@ macro_rules
 
 @[simp] def po_loc (evts : Events) (X : CandidateExecution evts) := X.po' ∩ CatRel.Rel.location
 
-@[simp] def fre (evts : Events) (X : CandidateExecution evts) := X.fr ∩ CatRel.Rel.external
+@[simp] def fre (evts : Events) (X : CandidateExecution evts) := X.fr' ∩ CatRel.Rel.external
 
 @[simp] def rfe (evts : Events) (X : CandidateExecution evts) := X.rf' ∩ CatRel.Rel.external
 

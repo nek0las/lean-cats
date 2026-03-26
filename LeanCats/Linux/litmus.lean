@@ -7,15 +7,9 @@ open Data
 
 namespace LinuxLitmus
 
-instance instWellformedPo (evts : Data.Events) : wellformed.po evts.po := by
-  intro x y z hxy hyz
-  rcases hxy with ⟨hx, hy, hxyTid, hxyLt⟩
-  rcases hyz with ⟨_, hz, hyzTid, hyzLt⟩
-  exact ⟨hx, hz, Eq.trans hxyTid hyzTid, Nat.lt_trans hxyLt hyzLt⟩
-
 instance instWellformedRmwEmpty (evts : Data.Events) : wellformed.rmw evts (∅ : SetRel Event Event) := by
   intro e h
-  exact False.elim h
+  contradiction
 
 abbrev x := 0
 
@@ -90,25 +84,8 @@ def corr_test : CandidateExecution corr_evts :=
     (uniqueId_by_id corr_evts)
     (by candidateExecution_wf [corr_rf])
     (by
-      candidateExecution_wf [corr_rf, corr_co, corr_evts]
-      · rcases a with ⟨hwAll, _, htid, hlt⟩
-        have hwCases : w = p0wX ∨ w = p1r0 ∨ w = p1r1 ∨ w = initWx := by
-          simpa [corr_evts, Events.all] using hwAll
-        exfalso
-        rcases hwCases with rfl | rfl | rfl | rfl
-        · cases htid
-        · exact False.elim (Nat.lt_irrefl _ hlt)
-        · cases htid
-        · cases htid
-      · rcases a with ⟨hwAll, _, htid, hlt⟩
-        have hwCases : w = p0wX ∨ w = p1r0 ∨ w = p1r1 ∨ w = initWx := by
-          simpa [corr_evts, Events.all] using hwAll
-        exfalso
-        rcases hwCases with rfl | rfl | rfl | rfl
-        · cases htid
-        · cases htid
-        · exact False.elim (Nat.lt_irrefl _ hlt)
-        · cases htid)
+      candidateExecution_wf [corr_rf, corr_co, corr_evts, Events.po, Events.all]
+      )
 
 theorem corr_FindCycle : ¬ (lkmm.coherence corr_evts corr_test) := by
   intro hacyc
@@ -123,7 +100,7 @@ theorem corr_FindCycle : ¬ (lkmm.coherence corr_evts corr_test) := by
     right
     refine ⟨initWx, ?_, ?_⟩
     · have hrf0' : (initWx, p1r1) ∈ corr_test.rf' := by
-        simpa [corr_test, corr_rf] using hrf0
+        simp [corr_test, corr_rf]
       simpa [SetRel.inv] using hrf0'
     · simp [corr_test, corr_co]
   have hrf1 : (p0wX, p1r0) ∈ rel := by

@@ -200,9 +200,9 @@ theorem rf_fr_subset_co
   (X : CandidateExecution evts)
   (w r w' : Event)
   (hrf : (w, r) ∈ X.rf')
-  (hfr : (r, w') ∈ X.fr) :
+  (hfr : (r, w') ∈ X.fr') :
   (w, w') ∈ X.co' := by
-  simp only [CandidateExecution.fr] at hfr
+  simp only [CandidateExecution.fr'] at hfr
   obtain ⟨w₁, h₁, h₂⟩ := hfr
   simp only [SetRel.inv] at h₁
   exact X.rfInst.unique w w₁ r hrf h₁ ▸ h₂
@@ -228,9 +228,9 @@ theorem fr_co_subset_fr
   {evts : Events}
   (X : CandidateExecution evts)
   (r w w' : Event)
-  (hfr : (r, w) ∈ X.fr)
+  (hfr : (r, w) ∈ X.fr')
   (hco : (w, w') ∈ X.co') :
-  (r, w') ∈ X.fr := by
-  simp only [CandidateExecution.fr] at *
+  (r, w') ∈ X.fr' := by
+  simp only [CandidateExecution.fr'] at *
   obtain ⟨w₀, h_inv, h_co⟩ := hfr
   exact ⟨w₀, h_inv, X.preCo.trans w₀ w w' h_co hco⟩
