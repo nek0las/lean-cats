@@ -57,11 +57,11 @@ Chosen rf edges: `p0wX -> p1r0` and `initWx -> p1r1`. -/
 @[simp] def corr_rfInst : wellformed.rf corr_evts corr_rf :=
   Data.wellformed.rf.mk
     (by
-      intro w r hrf
-      aesop (add simp [corr_rf, corr_evts, Events.all]))
+      candidateExecution_wf
+    )
     (by
-      intro w₁ w₂ r h1 h2
-      aesop (add simp [corr_rf]))
+      candidateExecution_wf
+    )
 
 def corr_test : CandidateExecution corr_evts :=
   {

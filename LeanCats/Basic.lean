@@ -60,6 +60,7 @@ theorem uniqueId_by_id (evts : Events) :
 macro "candidateExecution_wf" : tactic =>
   `(tactic|
     (all_goals repeat first
-       | aesop
+       | simp at *
+         aesop
        | (casesm _ ∈ _
           aesop)))
