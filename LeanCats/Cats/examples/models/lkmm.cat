@@ -1,0 +1,145 @@
+(*
+ * Copyright (C) 2015 Jade Alglave ,
+ * Copyright (C) 2016 Luc Maranget  for Inria
+ * Copyright (C) 2017 Alan Stern ,
+ *                    Andrea Parri 
+ *
+ * An earlier version of this file appeared in the companion webpage for
+ * "Frightening small children and disconcerting grown-ups: Concurrency
+ * in the Linux kernel" by Alglave, Maranget, McKenney, Parri, and Stern,
+ * which appeared in ASPLOS 2018.
+ *)
+
+(*
+ * File "lock.cat" handles locks and is experimental.
+ * It can be replaced by include "cos.cat" for tests that do not use locks.
+ *)
+
+include "lock.cat"
+
+(*******************)
+(* Basic relations *)
+(*******************)
+
+(* Release Acquire *)
+let acq-po = [Acquire] ; po ; [M]
+let po-rel = [M] ; po ; [Release]
+let po-unlock-rf-lock-po = po ; [UL] ; rf ; [LKR] ; po
+
+(* Fences *)
+let R4rmb = R \ Noreturn	(* Reads for which rmb works *)
+let rmb = [R4rmb] ; fencerel(Rmb) ; [R4rmb]
+let wmb = [W] ; fencerel(Wmb) ; [W]
+let mb = ([M] ; fencerel(Mb) ; [M]) |
+	([M] ; fencerel(Before-atomic) ; [RMW] ; po? ; [M]) |
+	([M] ; po? ; [RMW] ; fencerel(After-atomic) ; [M]) |
+	([M] ; po? ; [LKW] ; fencerel(After-spinlock) ; [M]) |
+	([M] ; po ; [UL] ; (co | po) ; [LKW] ;
+		fencerel(After-unlock-lock) ; [M])
+let strong-fence = mb
+
+let nonrw-fence = strong-fence | po-rel | acq-po
+let fence = nonrw-fence | wmb | rmb
+let barrier = fencerel(Barrier | Rmb | Wmb | Mb |
+		Before-atomic | After-atomic | Acquire | Release) |
+	(po ; [Release]) | ([Acquire] ; po)
+
+(**********************************)
+(* Fundamental coherence ordering *)
+(**********************************)
+
+(* Sequential Consistency Per Variable *)
+let com = rf | co | fr
+acyclic po-loc | com as coherence
+
+(* Atomic Read-Modify-Write *)
+empty rmw & (fre ; coe) as atomic
+
+(**********************************)
+(* Instruction execution ordering *)
+(**********************************)
+
+(* Preserved Program Order *)
+let dep = addr | data
+let rwdep = (dep | ctrl) ; [W]
+let overwrite = co | fr
+let to-w = rwdep | (overwrite & int) | (addr ; [Plain] ; wmb)
+let to-r = addr | (dep ; [Marked] ; rfi)
+let ppo = to-r | to-w | fence | (po-unlock-rf-lock-po & int)
+
+(* Propagation: Ordering from release operations and strong fences. *)
+let A-cumul(r) = (rfe ; [Marked])? ; r
+let cumul-fence = [Marked] ; (A-cumul(strong-fence | po-rel) | wmb |
+	po-unlock-rf-lock-po) ; [Marked]
+let prop = [Marked] ; (overwrite & ext)? ; cumul-fence* ;
+	[Marked] ; rfe? ; [Marked]
+
+(*
+ * Happens Before: Ordering from the passage of time.
+ * No fences needed here for prop because relation confined to one process.
+ *)
+let hb = [Marked] ; (ppo | rfe | ((prop \ id) & int)) ; [Marked]
+acyclic hb as happens-before
+
+(****************************************)
+(* Write and fence propagation ordering *)
+(****************************************)
+
+(* Propagation: Each non-rf link needs a strong fence. *)
+let pb = prop ; strong-fence ; hb* ; [Marked]
+acyclic pb as propagation
+
+(*
+ * The happens-before, propagation are all
+ * expressions of temporal ordering.  They could be replaced by
+ * a single constraint on an "executes-before" relation, xb:
+ *
+ * let xb = hb | pb | rb
+ * acyclic xb as executes-before
+ *)
+
+(*********************************)
+(* Plain accesses and data races *)
+(*********************************)
+
+(* Warn about plain writes and marked accesses in the same region *)
+let mixed-accesses = ([Plain & W] ; (po-loc \ barrier) ; [Marked]) |
+	([Marked] ; (po-loc \ barrier) ; [Plain & W])
+flag ~empty mixed-accesses as mixed-accesses
+
+(* Executes-before and visibility *)
+let xbstar = (hb | pb | rb)*
+let vis = cumul-fence* ; rfe? ; [Marked] ;
+	((strong-fence ; [Marked] ; xbstar) | (xbstar & int))
+
+(* Boundaries for lifetimes of plain accesses *)
+let w-pre-bounded = [Marked] ; (addr | fence)?
+let r-pre-bounded = [Marked] ; (addr | nonrw-fence |
+	([R4rmb] ; fencerel(Rmb) ; [~Noreturn]))?
+let w-post-bounded = fence? ; [Marked]
+let r-post-bounded = (nonrw-fence | ([~Noreturn] ; fencerel(Rmb) ; [R4rmb]))? ;
+	[Marked]
+
+(* Visibility and executes-before for plain accesses *)
+let ww-vis = fence | (strong-fence ; xbstar ; w-pre-bounded) |
+	(w-post-bounded ; vis ; w-pre-bounded)
+let wr-vis = fence | (strong-fence ; xbstar ; r-pre-bounded) |
+	(w-post-bounded ; vis ; r-pre-bounded)
+let rw-xbstar = fence | (r-post-bounded ; xbstar ; w-pre-bounded)
+
+(* Potential races *)
+let pre-race = ext & ((Plain * M) | ((M \ IW) * Plain))
+
+(* Coherence requirements for plain accesses *)
+let wr-incoh = pre-race & rf & rw-xbstar^-1
+let rw-incoh = pre-race & fr & wr-vis^-1
+let ww-incoh = pre-race & co & ww-vis^-1
+empty (wr-incoh | rw-incoh | ww-incoh) as plain-coherence
+
+(* Actual races *)
+let ww-nonrace = ww-vis & ((Marked * W) | rw-xbstar) & ((W * Marked) | wr-vis)
+let ww-race = (pre-race & co) \ ww-nonrace
+let wr-race = (pre-race & (co? ; rf)) \ wr-vis
+let rw-race = (pre-race & fr) \ rw-xbstar
+
+flag ~empty (ww-race | wr-race | rw-race) as data-race

@@ -1,0 +1,7 @@
+X86 SB+opt
+{ x=0; y=0; z=0; }
+P0                   | P1                   ;
+MOV [x],$1           | MOV [y],$1           ;
+MOV EAX,[y]          | MOV EBX,[x]          ;
+MOV [z],$1           | MOV ECX,[z]          ;
+exists (0:EAX=0 /\ 1:EBX=0 /\ 1:ECX=0)

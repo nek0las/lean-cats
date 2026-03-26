@@ -35,13 +35,34 @@ theorem RelProdIsSetProd (s₁ s₂ : Event -> Prop) (e₁ e₂ : Event) :
       aesop
     }
 
-abbrev Acyclic (r : SetRel Event Event) := ∀a : Event, ¬ Relation.TransGen (λ e₁ e₂ ↦ (e₁, e₂) ∈ r) a a
+@[simp] def SetRel.union (r₁ r₂ : SetRel Event Event) :=
+  {(e₁, e₂) | (e₁, e₂) ∈ r₁ ∨ (e₁, e₂) ∈ r₂}
 
-@[simp] def Rel.internal (e₁ e₂ : Event) : Prop :=
-  e₁.t_id = e₂.t_id
+class CatUnion (α : Type*) where
+  union : α → α → α
 
-@[simp] def Rel.external (e₁ e₂ : Event) : Prop :=
-  ¬ (Rel.internal e₁ e₂)
+@[reducible] instance : CatUnion (Set Event) where union := Set.union
+
+@[reducible] instance : CatUnion (SetRel Event Event) where union := CatRel.SetRel.union
+
+abbrev SetRel.ReflexiveTrans (r : SetRel Event Event) :=
+  {(e₁, e₂) | Relation.ReflTransGen (λ a b ↦ (a, b) ∈ r) e₁ e₂}
+
+abbrev SetRel.TransGen (r : SetRel Event Event) :=
+  {(e₁, e₂) | Relation.TransGen (λ a b ↦ (a, b) ∈ r) e₁ e₂}
+
+abbrev SetRel.Acyclic (r : SetRel Event Event) := ∀a : Event, (a, a) ∉ SetRel.TransGen r
+
+abbrev SetRel.IsEmpty (r : SetRel Event Event) := ∀e₁ e₂ : Event, (e₁, e₂) ∉ r
+
+@[simp] def Rel.location : SetRel Event Event :=
+  {(e₁, e₂) | e₁.effect.location = e₂.effect.location }
+
+@[simp] def Rel.internal : SetRel Event Event :=
+  {(e₁, e₂) | e₁.t_id = e₂.t_id}
+
+@[simp] def Rel.external : SetRel Event Event :=
+  {(e₁, e₂) | (e₁, e₂) ∉ Rel.internal}
 
 @[simp] def Rel.empty (_ _ : Event) : Prop :=
   False
@@ -134,7 +155,6 @@ structure co.wellformed
   (e1 e2 : Event)
   : Prop :=
   ∃w, isWrite w ∧ rf evts w e1 ∧ co.wellformed evts w e2
-
 
 def com
   (evts : Events)

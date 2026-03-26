@@ -1,0 +1,7 @@
+X86 RWC+MFence
+{ x=0; y=0; }
+P0          | P1                            | P2                   ;
+MOV [x],$1  | MOV EAX,[x]                  | MOV EBX,[x]          ;
+            | MFENCE                        | MOV ECX,[y]          ;
+            | MOV [y],$1                   |                      ;
+exists (1:EAX=1 /\ 2:EBX=0 /\ 2:ECX=1)

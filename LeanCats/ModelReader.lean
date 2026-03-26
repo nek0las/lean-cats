@@ -32,11 +32,3 @@ elab "defcat" "<" filename:str ">" : command => do
     -- Add the declaration to the environment
     dbg_trace model
     evalCat model
-
-section Test
-
-defcat <"linux.bell.test">
-#check Accesses.ACQUIRE
-#check Accesses.MB
-
-end Test

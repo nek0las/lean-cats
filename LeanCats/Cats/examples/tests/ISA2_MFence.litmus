@@ -1,0 +1,7 @@
+X86 ISA2+MFence
+{ x=0; y=0; z=0; }
+P0                   | P1                            | P2                   ;
+MOV [x],$1           | MOV EAX,[x]                  | MOV EBX,[y]          ;
+MOV [y],$1           | MFENCE                        | MOV ECX,[z]          ;
+                     | MOV [z],$1                   |                      ;
+exists (1:EAX=1 /\ 2:EBX=1 /\ 2:ECX=0)

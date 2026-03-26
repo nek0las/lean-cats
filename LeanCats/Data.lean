@@ -28,6 +28,9 @@ structure Event where
   effect : Effect -- Action performed
   tag : Σ tagType : Type, tagType
 
+inductive RMW where
+  | trmw
+
 -- Unsafe.
 axiom event_id_unique :
   ∀ e₁ e₂ : Event, e₁.id = e₂.id -> e₁ = e₂
@@ -77,13 +80,20 @@ structure Events where
 instance : Membership Event Events where
   mem := fun es e => e ∈ es.all
 
-@[simp] def Events.preCo (evts : Events) (co : SetRel Event Event) : Prop :=
-  ∀ e₁ e₂ : Event, (e₁, e₂) ∈ co ->
+structure Events.preCo (evts : Events) (co : SetRel Event Event) : Prop where
+  /-- Every pair in co consists of writes in evts at the same location. -/
+  wellTyped : ∀ e₁ e₂ : Event, (e₁, e₂) ∈ co →
     e₁ ∈ evts.all
     ∧ e₂ ∈ evts.all
     ∧ e₁.effect.op = Op.write
     ∧ e₂.effect.op = Op.write
     ∧ e₁.effect.location = e₂.effect.location
+  /-- co is total: any two distinct writes to the same location are co-ordered. -/
+  total : ∀ e₁ e₂ : Event,
+    e₁ ∈ evts.W → e₂ ∈ evts.W
+    → e₁.effect.location = e₂.effect.location
+    → e₁ ≠ e₂
+    → (e₁, e₂) ∈ co ∨ (e₂, e₁) ∈ co
 
 class wellformed.co (evts : Events) (corel : SetRel Event Event) : Prop where
   -- The Type is the Prop, and the proof is the term, do not use :=
@@ -91,11 +101,25 @@ class wellformed.co (evts : Events) (corel : SetRel Event Event) : Prop where
   trans : ∀ e₁ e₂ e₃, (e₁, e₂) ∈ corel -> (e₂, e₃) ∈ corel -> (e₁, e₃) ∈ corel
   preco : evts.preCo corel
 
-@[simp] def wellformed.rf (evts : Events) (rf : SetRel Event Event) : Prop :=
-  ∀ (w r : Event), (w, r) ∈ rf ->
+@[simp] def wellformed.rmw (evts : Events) (rmw : SetRel Event Event) : Prop :=
+  rmw ⊆ {(e₁, e₂) |
+    e₁.tag = ⟨RMW, RMW.trmw⟩
+    ∧ e₂.tag = ⟨RMW, RMW.trmw⟩
+    ∧ e₁ ∈ evts.R
+    ∧ e₂ ∈ evts.W
+    ∧ e₁.effect.location = e₂.effect.location}
+
+structure wellformed.rf (evts : Events) (rel : SetRel Event Event) : Prop where
+  /-- Every rf pair is a write to a read at the same location. -/
+  wellTyped : ∀ (w r : Event), (w, r) ∈ rel →
     w ∈ evts.W ∧ r ∈ evts.R
     ∧ w.effect.location = r.effect.location
     ∧ r.id ≠ w.id
+  /-- rf is functional: each read reads from at most one write. -/
+  unique : ∀ (w₁ w₂ r : Event), (w₁, r) ∈ rel → (w₂, r) ∈ rel → w₁ = w₂
+
+@[simp] def wellformed.po (po : SetRel Event Event) : Prop :=
+  ∀ x y z, (x, y) ∈ po -> (y, z) ∈ po -> (x, z) ∈ po
 
 @[simp] def Events.po (evts : Events) : SetRel Event Event :=
   λ (a, b) =>

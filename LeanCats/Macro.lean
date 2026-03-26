@@ -10,17 +10,15 @@ open Lean Elab Command Term Meta
 open Data
 
 syntax "[model|" ident inst* "]" : command
-syntax (name := catexpr) "[expr|" expr "," cat_ident "," cat_ident "]" : term
+syntax (name := catexpr) "[expr|" expr "," cat_ident "," cat_ident "," cat_ident "]" : term
 syntax "[keyword|" keyword "]" : term
 syntax "[assertion|" assertion "]" : term
-syntax (name := catinst) "[inst|" inst "," cat_ident "," cat_ident "]" : command
+syntax (name := catinst) "[inst|" inst "," cat_ident "," cat_ident "," cat_ident "]" : command
 syntax "[annotable-events|" annotable_events "," cat_ident "," cat_ident "]" : term -- Set
 syntax "[predefined-events|" predefined_events "," cat_ident "," cat_ident "]" : term
 syntax "[reserved|" reserved "," cat_ident "," cat_ident "]" : term
 syntax "[predefined-relations|" predefined_relations "," cat_ident "," cat_ident "]" : term
-syntax "[dsl-term|" dsl_term "," cat_ident "," cat_ident "]" : term
-
-initialize tagsAccExt : HashMapExtension String (List String) ← mkHashMapExtension `tags String (List String)
+syntax "[dsl-term|" dsl_term "," cat_ident "," cat_ident "," cat_ident "]" : term
 
 -- Walk any cat_ident syntax tree, collect all ident leaves, and join with "_".
 -- This handles plain idents, tick-prefixed ('ONCE), and multi-hyphen (rcu-lock, after-unlock-lock).
@@ -45,98 +43,70 @@ instance : Coe (TSyntax `ident) (TSyntax `cat_ident) where
 instance : Coe (TSyntax `ident) (TSyntax `annotable_events) where
   coe s := mkNode `annotable_events #[s]
 
-#check Set Event
+instance : Coe (TSyntax `predefined_events) (TSyntax `expr) where
+  coe s := mkNode `expr #[s]
+
+instance : Coe (TSyntax `predefined_relations) (TSyntax `expr) where
+  coe s := mkNode `expr #[s]
 
 -- Set α -> Set (α × α)
 def SetRel.mkId (s : Set Event) : SetRel Event Event :=
   fun (e₁, e₂) => e₁ = e₂ ∧ e₁ ∈ s
 
 macro_rules
-  | `([expr| $e₁:expr | $e₂:expr, $evts, $X]) =>
-    `(Set.union ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
-
-  | `([expr| $e₁:expr & $e₂:expr, $evts, $X]) =>
-    `(CatRel.inter ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
-
-  | `([expr| $e₁:expr ; $e₂:expr, $evts, $X]) =>
-    `(SetRel.comp ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
-
-  | `([expr| [ $i:expr ], $evts, $X ]) =>
-    `(SetRel.mkId `([expr| $i, $evts, $X]) )
-
-  | `([expr| $e₁:expr * $e₂:expr, $evts, $X]) =>
-    `(CatRel.prod ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
-
-  | `([expr| ~ $e:expr, $evts, $X]) =>
-    `(Set.compl ([expr| $e, $evts, $X]))
-
-  | `([expr| $e₁:expr \ $e₂:expr, $evts, $X]) =>
-    `(Set.diff ([expr| $e₁, $evts, $X]) ([expr| $e₂, $evts, $X]))
-
-  | `([expr| $e^-1, $evts, $X]) =>
-    `(Rel.inv ([expr| $e, $evts, $X]))
-
-  | `([expr| $r:reserved, $evts, $X]) =>
-    `([reserved| $r, $evts, $X])
-
-  | `([expr| ($e:expr), $evts, $X]) =>
-    `([expr| $e, $evts, $X])
-
-  | `([expr| $t:dsl_term, $evts, $X]) =>
-    `(([dsl-term| $t, $evts, $X]))
-
-  | `([expr| $i:cat_ident ($e:expr), $evts, $X]) => do
-    -- function call.
-    `(($i) ([expr| $e, $evts, $X]))
-
--- @[term_elab catexpr]
--- def elabCatExpr : TermElab := fun stx type? => do
---   match stx with
---   | `([expr| $i:cat_ident ($e:expr), $evts, $X]) => do
---     let catName : Name := catIdentToName i.raw
---     -- We need to check if it's tag set accumulated by the `instructions` command.
---     let tagsMap : Option (List String) <- tagsAccExt.find? catName.toString
---     match tagsMap with
---     | some annotableEvts => do
---       -- If it's an instruction set, we need to generate the union of all the tags in the set.
---       let annotedEvts <- annotableEvts.mapM (fun a => `([annotable-events| $(mkIdent a.toName), $evts, $X]))
---       let dnf <- annotedEvts.foldlM (fun acc evt => do
---         let con <- `($acc ∨ [annotable-events| $evt, $evts, $X])
---         return con
---       ) (mk mkNullNode #[])
---
---       dbg_trace dnf
---
---       let currNamespace <- getCurrNamespace
---       -- This is used to get the full name with namespace.
---       let typeName := Name.updatePrefix i.getId currNamespace
---       let env <- getEnv
---
---       let info <- getConstInfoInduct typeName
---       dbg_trace typeName
---
---       let commands <- info.ctors.mapM (
---         fun ctor => do
---         -- Make the constructors name correct by removing the end tick.
---         let ctorName : Name := ctor.lastComponentAsString.dropEnd 1 |>.toName
---         -- TODO(Nekolas): Make this part `∩ [annotable-events| $a]` work.
---         let ctorDef <-
---         `(
---           abbrev $(mkIdent ctorName) :
---             Set Event := {e | e.tag = $(mkIdent ctor) } ∩ $dnf
---         )
---         return ctorDef
---       )
---
---       pure (← elabTerm (← `(($i $evts $X) ([expr| $e, $evts, $X]))) type?)
---     | none =>
---       pure (← elabTerm (← `(($i $evts $X) ([expr| $e, $evts, $X]))) type?)
---   | _ => Lean.Elab.throwUnsupportedSyntax
---   -- elabTerm expandedStx expectedType?
+  | `([dsl-term| $i:cat_ident, $evts, $X, $arg]) =>
+    -- Apply the arg instead of using the id in the env.
+    if arg.getId = i.getId then
+      `($i)
+    else
+      `($i $evts $X)
 
 macro_rules
-  | `([dsl-term| $i:cat_ident, $evts, $X]) =>
-      `($i $evts $X)
+  | `([expr| $e₁:expr | $e₂:expr, $evts, $X, $arg]) =>
+    `(CatRel.CatUnion.union ([expr| $e₁, $evts, $X, $arg]) ([expr| $e₂, $evts, $X, $arg]))
+
+  | `([expr| $e₁:expr & $e₂:expr, $evts, $X, $arg]) =>
+    `(Set.inter ([expr| $e₁, $evts, $X, $arg]) ([expr| $e₂, $evts, $X, $arg]))
+
+  | `([expr| $e₁:expr ; $e₂:expr, $evts, $X, $arg]) =>
+    `(SetRel.comp ([expr| $e₁, $evts, $X, $arg]) ([expr| $e₂, $evts, $X, $arg]))
+
+  | `([expr| [ $i:expr ], $evts, $X, $arg]) =>
+    `(SetRel.mkId ([expr| $i, $evts, $X, $arg]))
+
+  | `([expr| $e₁:expr * $e₂:expr, $evts, $X, $arg]) =>
+    `(CatRel.prod ([expr| $e₁, $evts, $X, $arg]) ([expr| $e₂, $evts, $X, $arg]))
+
+  | `([expr| ~ $e:expr, $evts, $X, $arg]) =>
+    `(Set.compl ([expr| $e, $evts, $X, $arg]))
+
+  | `([expr| $e₁:expr \ $e₂:expr, $evts, $X, $arg]) =>
+    `(Set.diff ([expr| $e₁, $evts, $X, $arg]) ([expr| $e₂, $evts, $X, $arg]))
+
+  | `([expr| $e^-1, $evts, $X, $arg]) =>
+    `(Rel.inv ([expr| $e, $evts, $X, $arg]))
+
+  | `([expr| $e ?, $evts, $X, $arg]) =>
+    `(([expr| $e, $evts, $X, $arg]) ∪ {(e₁, e₂) | e₁ = e₂})
+
+  | `([expr| $e *, $evts, $X, $arg]) =>
+    `(([expr| $e, $evts, $X, $arg]) ∪ {(e₁, e₂) | e₁ = e₂})
+
+  | `([expr| $e +, $evts, $X, $arg]) =>
+    `(([expr| $e, $evts, $X, $arg]))
+
+  | `([expr| $r:reserved, $evts, $X, $_]) =>
+    `([reserved| $r, $evts, $X])
+
+  | `([expr| ($e:expr), $evts, $X, $arg]) =>
+    `([expr| $e, $evts, $X, $arg])
+
+  | `([expr| $t:dsl_term, $evts, $X, $arg]) =>
+    `(([dsl-term| $t, $evts, $X, $arg]))
+
+  | `([expr| $i:dsl_term ($e:expr), $evts, $X, $arg]) => do
+    -- function call.
+    `(([dsl-term| $i, $evts, $X, $arg]) ([expr| $e, $evts, $X, $arg]))
 
 macro_rules
   | `([reserved| $r:predefined_relations, $evts, $X]) =>
@@ -145,27 +115,55 @@ macro_rules
 
 macro_rules
   | `([predefined-relations| fr, $_, $X]) =>
-    let rfIdent := mkIdent "_fr".toName
-    `($X.$rfIdent)
+    let nm := mkIdent "fr'".toName
+    `($X.$nm)
 
   | `([predefined-relations| po, $_, $X]) =>
-    let rfIdent := mkIdent "_po".toName
-    `($X.$rfIdent)
+    let nm := mkIdent "po'".toName
+    `($X.$nm)
 
   | `([predefined-relations| rf, $_, $X]) =>
-    let rfIdent := mkIdent "_rf".toName
-    `($X.$rfIdent)
-
-  | `([predefined-relations| rfe, $_, $X]) =>
-    let rfIdent := mkIdent "_rf".toName
-    `($X.$rfIdent)
+    let nm := mkIdent "rf'".toName
+    `($X.$nm)
 
   | `([predefined-relations| rmw, $_, $X]) =>
-    let rfIdent := mkIdent "_rmw".toName
-    `($X.$rfIdent)
+    let nm := mkIdent "rmw'".toName
+    `($X.$nm)
 
-  | `([predefined-relations| co, $evts, $_]) =>
-    `(CatRel.co.wellformed $evts)
+  | `([predefined-relations| co, $_, $X]) =>
+    let co' := mkIdent "co'".toName
+    `($X.$co')
+
+  | `([predefined-relations| id, $_, $_]) =>
+    `(SetRel.id)
+
+  | `([predefined-relations| data, $_, $X]) =>
+    let nm := mkIdent "data'".toName
+    `($X.$nm)
+
+  | `([predefined-relations| addr, $_, $X]) =>
+    let nm := mkIdent "addr'".toName
+    `($X.$nm)
+
+  | `([predefined-relations| ctrl, $_, $X]) =>
+    let nm := mkIdent "ctrl'".toName
+    `($X.$nm)
+
+  | `([predefined-relations| wmb, $_, $X]) =>
+    let nm := mkIdent "wmb'".toName
+    `($X.$nm)
+
+  | `([predefined-relations| fence, $_, $X]) =>
+    let nm := mkIdent "fence'".toName
+    `($X.$nm)
+
+  | `([predefined-relations| rmb , $_, $X]) =>
+    let nm := mkIdent "rmb'".toName
+    `($X.$nm)
+
+  | `([predefined-relations| mb , $_, $X]) =>
+    let nm := mkIdent "mb'".toName
+    `($X.$nm)
 
 macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
@@ -189,9 +187,9 @@ macro_rules
   | `([keyword| $a:assertion]) => `([assertion| $a])
 
 macro_rules
-  | `([assertion| irreflexive]) => `(CatRel.Irreflexive)
-  | `([assertion| acyclic]) => `(CatRel.Acyclic)
-  | `([assertion| empty]) => `(CatRel.IsEmpty)
+  | `([assertion| irreflexive]) => `(CatRel.SetRel.Irreflexive)
+  | `([assertion| acyclic]) => `(CatRel.SetRel.Acyclic)
+  | `([assertion| empty]) => `(CatRel.SetRel.IsEmpty)
 
 macro_rules
   | `([annotable-events| W, $evts, $X]) =>
@@ -212,51 +210,45 @@ macro_rules
   | `([annotable-events| SRCU, $evts, $X]) =>
     let nm := mkIdent "SRCU".toName
     `(($X.$evts.$nm : Set Event))
-
-namespace TestAnnotableEvents
-variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (x : CandidateExecution evts)
-def a := [annotable-events| R, evts, x]
-#reduce a
-end TestAnnotableEvents
+  | `([annotable-events| M, $evts, $X]) =>
+    let nm := mkIdent "M".toName
+    `(($X.$evts.$nm : Set Event))
 
 macro_rules
   -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
-  | `([predefined-events| IW, $evts, $X]) =>
+  | `([predefined-events| IW, $evts, $_]) =>
     let nm := mkIdent "IW".toName
-    `($X.$evts.$nm)
+    `($evts.$nm)
 
-  | `([predefined-events| M, $evts, $X]) =>
+  | `([predefined-events| M, $evts, $_]) =>
     let nm := mkIdent "M".toName
-    `($X.$evts.$nm)
+    `($evts.$nm)
 
   | `([predefined-events| $a:annotable_events, $evts, $X]) =>
     `([annotable-events| $a, $evts, $X])
 
-namespace TestPredefinedEvents
-variable (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (x : CandidateExecution evts)
-def a := [predefined-events| R, evts, x]
-
-#reduce a
-end TestPredefinedEvents
-
 macro_rules
   -- We just ignore the include inst.
-  | `([inst| include $_filename:str , $_ , $_]) => return mkNullNode
+  | `([inst| include $_filename:str , $_ , $_, $_]) => return mkNullNode
 
-  | `([inst| let $nm:cat_ident = $e, $evts, $X]) =>
-    `(abbrev $nm := [expr|$e, $evts, $X])
+  | `([inst| let $nm:cat_ident = $e, $evts, $X, $arg]) =>
+    `(@[simp] def $nm := [expr|$e, $evts, $X, $arg])
 
-  | `([inst| $a:assertion $e as $_:cat_ident, $evts, $X]) => do
-    `([assertion| $a] ([expr| $e, $evts, $X]))
+  | `([inst| let $nm:cat_ident ( $arg:cat_ident ) = $e:expr, $evts, $X, $_]) => do
+    -- This is where we use the real arg.
+    `(@[simp] def $nm ($arg:ident : SetRel Event Event) := [expr| $e, $evts, $X, $arg])
 
-  | `([inst| ~$a:assertion $e as $nm:cat_ident, $evts, $X]) => do
-    `([assertion| $a] (¬[expr| $e, $evts, $X]))
+  | `([inst| $a:assertion $e as $nm:cat_ident, $evts, $X, $arg]) => do
+    `(@[simp] def $nm := ([assertion| $a] ([expr| $e, $evts, $X, $arg])))
 
-  | `([inst| enum $nm:cat_ident = $[ $tags:cat_ident ]||*, $_, $_]) => do
+  | `([inst| ~$a:assertion $e as $nm:cat_ident, $evts, $X, $arg]) => do
+    `(@[simp] def $nm := [assertion| $a] (¬[expr| $e, $evts, $X, $arg]))
+
+  | `([inst| enum $nm:cat_ident = $[ $tags:cat_ident ]||*, $_, $_, $_]) => do
     let nmIdent : TSyntax `ident := nm
     -- Convert each cat_ident tag to a plain Lean ident (handles multi-hyphen names like rcu-lock → rcu_lock, and adds trailing ').
     let tagIdents : Array (TSyntax `ident) := tags.map (fun t =>
-      mkIdent (Name.mkSimple ((catIdentToName t.raw).toString ++ "'")))
+      mkIdent (Name.mkSimple ((catIdentToName t.raw).toString)))
     let indef <- `(
       inductive $nmIdent where $[| $tagIdents:ident ]*
     )
@@ -267,22 +259,9 @@ macro_rules
     let ret := #[indef] ++ aliases
     return mkNullNode ret
 
-  | `([inst| flag $_:assertion $_:expr as $_:expr, $_, $_]) => do
+  | `([inst| flag $_:assertion $_:expr as $_:expr, $_, $_, $_]) => do
     -- We ignore the flag for now, since it doesn't change the states of the execution, it's just used to witness the assertion.
     return mkNullNode #[]
-
--- namespace LKMM
--- [inst| let rcu-fn =
---   unmatched-locks = Rcu-lock \ domain(matched)
---   and unmatched-unlocks = Rcu-unlock \ range(matched)
---   and unmatched = unmatched-locks | unmatched-unlocks
---   and unmatched-po = [unmatched]; po; [unmatched]
---   and unmatched-locks-to-unlocks =
---   [unmatched-locks]; po; [unmatched-unlocks]
---   and matched = matched | (unmatched-locks-to-unlocks \
---   (unmatched-po; unmatched-po))]
---
--- end LKMM
 
 /--
 Processes `instructions A[EnumType]` by generating a definition for each constructor of `EnumType`.
@@ -298,27 +277,30 @@ we generate:
 @[command_elab catinst]
 def elabCatInst : CommandElab := fun stx => do
   match stx with
-  | `([inst| instructions $a:annotable_events [ $c:cat_ident ] , $evts:cat_ident , $X:cat_ident]) => do
-    dbg_trace "entering elabCatInst"
+  | `([inst| instructions { $a:annotable_events,* }[ $c:cat_ident ] , $evts:cat_ident , $X:cat_ident, $_:cat_ident]) => do
     let currNamespace <- getCurrNamespace
     -- This is used to get the full name with namespace.
     let typeName := Name.updatePrefix c.getId currNamespace
 
     let info <- getConstInfoInduct typeName
-    dbg_trace typeName
 
     let commands <- info.ctors.mapM (
       fun ctor => do
         -- Make the constructors name correct by removing the end tick.
-        let ctorName : Name := ctor.lastComponentAsString.dropEnd 1 |>.toName
+        let ctorName : Name := ctor.lastComponentAsString.dropEnd 1 |>.toName |>.capitalize
         -- TODO(Nekolas): Make this part `∩ [annotable-events| $a]` work.
         if (<-getEnv).contains ctorName then
           return (TSyntax.mk $ mkNullNode #[])
         else
-          let ctorDef <-
-          `(
+          let ctorDef <- `({e | e.tag = ⟨$(mkIdent typeName), $(mkIdent ctor)⟩ })
+
+          let inters : TSyntax `term ← a.getElems.foldlM
+            (fun (acc : TSyntax `term) (ae_i : TSyntax `annotable_events) => do
+            `( $acc ∩ [annotable-events| $ae_i, $evts, $X] )) ctorDef
+
+          let ctorDef <- `(
             abbrev $(mkIdent ctorName) :
-              Set Event := {e | e.tag = ⟨$(mkIdent typeName), $(mkIdent ctor)⟩ } ∩ ([annotable-events| $a, $evts, $X])
+              Set Event := $inters
           )
           return ctorDef
         )
@@ -330,71 +312,49 @@ macro_rules
   -- Create the model.
   | `([model| $n:ident $xs:inst*]) => do
     let nstart <- `(namespace $n)
+    let placeHolder := mkIdent `__
     let evts := mkIdent `evts
     let X := mkIdent `x
     let vars <- `(variable ($evts : Events) [IsStrictTotalOrder Event (CatRel.preCo $evts)] ($X : CandidateExecution $evts))
     let nend <- `(end $n)
-    let insts <- xs.mapM (fun ins => `([inst| $ins, $evts, $X]))
+    let insts <- xs.mapM (fun ins => `([inst| $ins, $evts, $X, $placeHolder]))
 
     -- let insts : Array (TSyntax `command) := #[]
     let ret := #[nstart] ++ #[vars] ++ insts ++ #[nend]
     return mkNullNode ret
 
--- Linux-kernel memory consistency model  ("linux.bell" excerpt)
--- Comments (*...*) and tick-prefixes (') are stripped by the preprocessor
--- before these lines reach the Lean syntax; we write the cleaned form here.
-[model| t
-  enum Barriers =
-    wmb || rmb || barrier || rcu_read_lock || rcu_read_unlock ||
-    rcu_lock || rcu_unlock || sync_rcu ||
-    before_atomic || after_atomic ||
-    after_spinlock || after_unlock_lock ||
-    after_srcu_read_unlock
+@[simp] def domain (evts : Events) (_ : CandidateExecution evts) (r : SetRel Event Event) := SetRel.dom r
 
-  instructions F[Barriers]
-]
+@[simp] def range (evts : Events) (_ : CandidateExecution evts) (r : SetRel Event Event) := SetRel.cod r
 
-#check t.Barriers.after_atomic'
-#reduce t.after_atomic
+@[simp] def po_loc (evts : Events) (X : CandidateExecution evts) := X.po' ∩ CatRel.Rel.location
 
--- The tag name will be capilized automatically.
--- https://github.com/herd/herdtools7/blob/2ad8eadf3246b66c4e03248d80bde8a11b7d00fb/lib/BellName.ml#L31
+@[simp] def fre (evts : Events) (X : CandidateExecution evts) := X.fr' ∩ CatRel.Rel.external
 
--- Spot-check generated names
--- This tags used as the event tags, we don't refer them directly.
-#check t.Barriers.wmb'
-#reduce t.Barriers.wmb'
+@[simp] def rfe (evts : Events) (X : CandidateExecution evts) := X.rf' ∩ CatRel.Rel.external
 
-abbrev domain (r : SetRel Event Event) := SetRel.dom r
+@[simp] def rfi (evts : Events) (X : CandidateExecution evts) := X.rf' ∩ CatRel.Rel.internal
 
-abbrev range (r : SetRel Event Event) := SetRel.cod r
+@[simp] def coe (evts : Events) (X : CandidateExecution evts) := X.co' ∩ CatRel.Rel.external
 
-[model| test
-  let acq = [M]
-]
+@[simp] def int (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
 
-namespace LinuxTest
-[model| linux
+@[simp] def ext (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.external
 
-enum Accesses = ONCE  ||
-  RELEASE  ||
-  ACQUIRE  ||
-  NORETURN  ||
-  MB
-instructions R[Accesses]
+[model| lkmm
 
-enum Barriers = wmb  ||
-  rmb  ||
-  barrier  ||
-  rcu-lock   ||
-  rcu-unlock  ||
-  sync-rcu  ||
-  before-atomic  ||
-  after-atomic  ||
-  after-spinlock  ||
-  after-unlock-lock  ||
-  after-srcu-read-unlock
-instructions F[Barriers]
+enum Accesses = ONCE' ||
+  RELEASE'  ||
+  ACQUIRE'  ||
+  NORETURN'  ||
+  MB'
+instructions {R, W, RMW}[Accesses]
+
+enum Barriers = wmb'  ||
+  rmb'  ||
+  barrier'
+
+instructions {F}[Barriers]
 
 let FailedRMW = RMW \ (domain(rmw) | range(rmw))
 let Acquire = ACQUIRE \ W \ FailedRMW
@@ -402,16 +362,58 @@ let Release = RELEASE \ R \ FailedRMW
 let Mb = MB \ FailedRMW
 let Noreturn = NORETURN \ W
 
-enum srcu = Srcu_lock || Srcu_unlock || Sync_srcu
-instructions SRCU[srcu]
-let Srcu = Srcu_lock | Srcu_unlock | Sync_srcu
+let Marked = (~M) | IW | ONCE | RELEASE | ACQUIRE | MB | RMW
 
-let Marked = (~M) | IW | ONCE | RELEASE | ACQUIRE | MB | RMW | Srcu-lock | Srcu-unlock
 let Plain = M \ Marked
 
+let strong_fence = mb
+
+-- Acquire-Release
+let acq_po = [Acquire] ; po ; [M]
+let po_rel = [M] ; po ; [Release]
+
+-- SCPV
+let com = rf | co | fr
+acyclic po_loc | com as coherence
+
+-- Atomic Read-Modify-Write
+empty rmw & (fre ; coe) as atomic
+
+-- Preserved Program Order
+let dep = addr | data
+let rwdep = (dep | ctrl) ; [W]
+let overwrite = co | fr
+let to_w = rwdep | (overwrite & int) | (addr ; [Plain] ; wmb)
+let to_r = addr | (dep ; [Marked] ; rfi)
+let ppo = to_r | to_w | fence
+
+let A_cumul(r) = (rfe ; [Marked])? ; r
+
+let a = A_cumul(po_rel)
+
+let cumul_fence = [Marked] ; (A_cumul(strong_fence | po_rel) | wmb) ; [Marked]
+let prop = [Marked] ; (overwrite & ext)? ; cumul_fence* ; [Marked] ; (rfe)? ; [Marked]
+
+-- Happends Before Relation
+let hb = [Marked] ; (ppo | rfe | ((prop \ id) & int)) ; [Marked]
+
+acyclic hb as happens_before
+
+-- Propagation Before Relation
+let pb = prop ; strong_fence ; hb* ; [Marked]
+acyclic pb as propagation
 ]
 
-#reduce linux.Plain
+#reduce lkmm.ACQUIRE
+#reduce lkmm.coherence
+#reduce lkmm.atomic
+#reduce lkmm.happens_before
+#reduce lkmm.propagation
 
--- Check the instruction sets
-end LinuxTest
+[model| tso_x86
+
+let xppo = ((W*W) | (R*W) | (R*R)) & po
+let At = domain(rmw) | range(rmw)
+let implied = po;[At | F] | [At | F];po
+acyclic (implied | xppo | rfe | fr | co) as tso
+]

@@ -435,7 +435,7 @@ private def sbEvents : Array Event :=
   #[initWx, initWy, inst1writeX, inst2readY, inst3writeY, inst4readX]
 
 private def sbRf : Array (Event × Event) :=
-  #[(initWy, inst2readY), (inst1writeX, inst4readX)]
+  #[(initWy, inst2readY), (initWx, inst4readX)]
 
 private def sbCo : Array (Event × Event) :=
   #[(initWx, inst1writeX), (initWy, inst3writeY)]
