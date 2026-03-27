@@ -211,8 +211,9 @@ macro_rules
     let nm := mkIdent "SRCU".toName
     `(($X.$evts.$nm : Set Event))
   | `([annotable-events| M, $evts, $X]) =>
-    let nm := mkIdent "M".toName
-    `(($X.$evts.$nm : Set Event))
+      let reads := mkIdent "R".toName
+      let writes := mkIdent "W".toName
+      `(($X.$evts.$reads ∪ $X.$evts.$writes : Set Event))
 
 macro_rules
   -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
