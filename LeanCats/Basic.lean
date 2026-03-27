@@ -24,6 +24,7 @@ structure CandidateExecution (evts : Events) where
   ctrl' : SetRel Event Event := ∅
   fence' : SetRel Event Event := ∅
   mb' : SetRel Event Event := ∅
+  SYNC' : SetRel Event Event := ∅
   uniqueId : ∀ (e₁ e₂ : Event),
     e₁ ∈ evts.all → e₂ ∈ evts.all
     -> e₁ ≠ e₂

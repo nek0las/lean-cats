@@ -165,6 +165,10 @@ macro_rules
     let nm := mkIdent "mb'".toName
     `($X.$nm)
 
+  | `([predefined-relations| SYNC , $_, $X]) =>
+    let nm := mkIdent "SYNC'".toName
+    `($X.$nm)
+
 macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
   | `([keyword| as]) => Lean.Macro.throwUnsupported
@@ -219,10 +223,6 @@ macro_rules
   -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
   | `([predefined-events| IW, $evts, $_]) =>
     let nm := mkIdent "IW".toName
-    `($evts.$nm)
-
-  | `([predefined-events| M, $evts, $_]) =>
-    let nm := mkIdent "M".toName
     `($evts.$nm)
 
   | `([predefined-events| $a:annotable_events, $evts, $X]) =>

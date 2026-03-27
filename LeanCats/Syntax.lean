@@ -83,6 +83,7 @@ syntax "addr" : predefined_relations -- address dependencies, starts with a read
 syntax "rmb" : predefined_relations -- read memory barrier, read -> read
 syntax "wmb" : predefined_relations -- write memory barrier, write -> write
 syntax "fence" : predefined_relations -- fence barrier
+syntax "SYNC" : predefined_relations -- SYNC instruction for mips.
 
 syntax keyword : dsl_term
 syntax num : dsl_term
