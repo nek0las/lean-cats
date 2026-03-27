@@ -9,6 +9,7 @@ import LeanCats.CatPreprocessor
 import LeanCats.Macro
 import LeanCats.Theorems
 import LeanCats.TsoWeakerThanSc
+import LeanCats.mipsWeakerThanTSO
 import LeanCats.ModelReader
 import LeanCats.Litmus
 import LeanCats.LitmusParser

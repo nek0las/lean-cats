@@ -1,0 +1,12 @@
+let fencerel(r) = (po & (_ * r)) ;  po
+let com = rf | fr | co
+acyclic po_loc | com as uniproc
+
+let sync = try fencerel(SYNC) with 0
+
+empty rmw & (fre;coe) as atomic
+
+let ppo = po & (R * M) | sync
+
+let ghb = ppo | rfe | fr | co
+acyclic ghb as pso

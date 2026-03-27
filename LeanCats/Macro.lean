@@ -53,6 +53,21 @@ instance : Coe (TSyntax `predefined_relations) (TSyntax `expr) where
 def SetRel.mkId (s : Set Event) : SetRel Event Event :=
   fun (e₁, e₂) => e₁ = e₂ ∧ e₁ ∈ s
 
+@[simp] theorem SetRel.dom_mkId (s : Set Event) : SetRel.dom (SetRel.mkId s) = s := by
+  ext e
+  constructor
+  · intro h
+    rcases h with ⟨e', heq, hs⟩
+    simpa [SetRel.mkId] using hs
+  · intro hs
+    exact ⟨e, rfl, hs⟩
+
+instance : Coe (Set Event) (SetRel Event Event) where
+  coe := SetRel.mkId
+
+instance : Coe (SetRel Event Event) (Set Event) where
+  coe := SetRel.dom
+
 macro_rules
   | `([dsl-term| $i:cat_ident, $evts, $X, $arg]) =>
     -- Apply the arg instead of using the id in the env.
@@ -91,6 +106,9 @@ macro_rules
 
   | `([expr| $e *, $evts, $X, $arg]) =>
     `(([expr| $e, $evts, $X, $arg]) ∪ {(e₁, e₂) | e₁ = e₂})
+
+  | `([expr| try $e with $_, $evts, $X, $arg]) =>
+    `(([expr| $e, $evts, $X, $arg]))
 
   | `([expr| $e +, $evts, $X, $arg]) =>
     `(([expr| $e, $evts, $X, $arg]))
@@ -198,6 +216,9 @@ macro_rules
 macro_rules
   | `([annotable-events| W, $evts, $X]) =>
     let nm := mkIdent "W".toName
+    `(($X.$evts.$nm : Set Event))
+  | `([annotable-events| _, $evts, $X]) =>
+    let nm := mkIdent "all".toName
     `(($X.$evts.$nm : Set Event))
   | `([annotable-events| R, $evts, $X]) =>
     let nm := mkIdent "R".toName
@@ -410,11 +431,3 @@ acyclic pb as propagation
 #reduce lkmm.atomic
 #reduce lkmm.happens_before
 #reduce lkmm.propagation
-
-[model| tso_x86
-
-let xppo = ((W*W) | (R*W) | (R*R)) & po
-let At = domain(rmw) | range(rmw)
-let implied = po;[At | F] | [At | F];po
-acyclic (implied | xppo | rfe | fr | co) as tso
-]

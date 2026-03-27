@@ -24,7 +24,11 @@ structure CandidateExecution (evts : Events) where
   ctrl' : SetRel Event Event := ∅
   fence' : SetRel Event Event := ∅
   mb' : SetRel Event Event := ∅
-  SYNC' : SetRel Event Event := ∅
+  SYNC' : Set Event := ∅
+  -- Specific fence event sets depend on the test architecture,
+  -- their name is always uppercase and derives from the mnemonic of the instruction that generates them.
+  syncInF : ∀ (e : Event), e ∈ SYNC' → e ∈ evts.F
+
   uniqueId : ∀ (e₁ e₂ : Event),
     e₁ ∈ evts.all → e₂ ∈ evts.all
     -> e₁ ≠ e₂

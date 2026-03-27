@@ -63,8 +63,8 @@ syntax "RMW" : annotable_events -- read-modify-write events
 syntax "SRCU" : annotable_events -- srcu events
 syntax "IW" : annotable_events -- initial writes
 syntax "M" : annotable_events -- memory events, M = W ∪ R
+syntax "_" : annotable_events -- all events
 
-syntax "___" : predefined_events -- all events
 syntax annotable_events : predefined_events
 
 /- defined_relations: -/
@@ -110,8 +110,9 @@ syntax expr "?" : expr
 syntax:71 expr "^-1" : expr
 -- The procedure will return a value, so we can use it in the expression.
 syntax dsl_term "(" expr,* ")" : expr
-
 syntax "[" expr "]" : expr
+-- Error handling in OCaml, we can just ignore it.
+syntax "try" expr "with" expr : expr
 
 syntax assertion expr ("as" cat_ident)? : inst
 -- The flag is used to witness the assertion, so it doesn't change the states of the execution, we could just ignore it.

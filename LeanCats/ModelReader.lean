@@ -26,7 +26,7 @@ def evalCat (s : String) : Lean.Elab.Command.CommandElabM Unit := do
 -- we can call IO under the CommandM.
 elab "defcat" "<" filename:str ">" : command => do
     let fn := Filename.mkName filename.getString
-    let path := "LeanCats/Cats/" ++ filename.getString
+    let path := "LeanCats/Cats/examples/models/" ++ filename.getString
     let s <- IO.FS.readFile path
     let model := "[model| " ++ fn.toString ++ " " ++ (removeComments s) ++ "]"
     -- Add the declaration to the environment
