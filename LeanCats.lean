@@ -17,3 +17,4 @@ import LeanCats.LitmusGraph
 import LeanCats.LitmusGraphBridge
 import LeanCats.LitmusReader
 import LeanCats.Linux.CoRR_poonceonce_Once
+import LeanCats.Linux.X86_SB_rfi_pos

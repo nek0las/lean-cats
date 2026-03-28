@@ -39,11 +39,6 @@ structure CandidateExecution (evts : Events) where
     (w, r) ∈ rf'
     → w.t_id = r.t_id
     → (w, r) ∈ evts.po
-  coWR : ∀ (w r w' : Event),
-    (w, r) ∈ evts.po
-    → w.effect.location = r.effect.location
-    → (w', r) ∈ rf'
-    → (w, w') ∈ co' ∨ w = w'
 
 /-- from-reads: always defined as rf⁻¹ ; co, so it is transparent to the kernel. -/
 @[simp] def CandidateExecution.fr' {evts : Events} (X : CandidateExecution evts) : SetRel Event Event :=
