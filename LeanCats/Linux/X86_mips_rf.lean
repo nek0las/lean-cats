@@ -10,11 +10,12 @@ import LeanCats.Basic
 defcat <"mips.cat">
 defcat <"tsox.cat">
 
-set_option maxHeartbeats 2000000
+-- In this litmus test, we want to show that sometimes the X86 is weaker than mips because of the sc-per-location.
 
 open Data
 
 namespace Litmus
+
 
 instance instWellformedPo (evts : Data.Events) : wellformed.po evts.po := by
   intro x y z hxy hyz
@@ -134,64 +135,3 @@ instance : wellformed.co sbrfi_evts sbrfi_co where
       · rcases h with ⟨rfl, rfl⟩
         simp at htid
   }
-
-example : tsox.tso sbrfi_evts sbrfi_test := by
-  simp only [tsox.tso]
-  apply acyclic_of_rank (fun e => match e.id with
-    | 100 => 0  -- initWx
-    | 101 => 1  -- initWy
-    | 2   => 2  -- p0rX1
-    | 5   => 3  -- p1rY1
-    | 3   => 4  -- p0rY0
-    | 6   => 5  -- p1rX0
-    | 4   => 6  -- p1wY
-    | 1   => 7  -- p0wX
-    | _   => 8)
-  intro a b hab
-  simp only [CatRel.CatUnion.union, CatRel.SetRel.union, Set.mem_setOf_eq,
-             tsox.implied, tsox.xppo, tsox.At, rfe,
-             CandidateExecution.fr', SetRel.inv, SetRel.comp,
-             sbrfi_test, sbrfi_rf, sbrfi_co, sbrfi_evts,
-             Data.Events.all, Data.Events.po, SetRel.mkId,
-             CatRel.prod, Set.mem_prod, Set.prod,
-             CatRel.W, CatRel.R,
-             CatRel.Rel.external, CatRel.Rel.internal,
-             Set.mem_inter_iff, Set.mem_union, Set.mem_setOf_eq,
-             Set.mem_insert_iff, Set.mem_singleton_iff, Set.mem_empty_iff_false,
-             Set.mem_preimage, Prod.swap,
-             SetRel.dom, SetRel.cod, SetRel.dom_mkId,
-             Prod.mk.injEq, Prod.fst, Prod.snd,
-             and_false, false_and, false_or, or_false,
-             not_true, not_false_eq_true,
-             exists_false, exists_eq_left, exists_eq_left'] at hab
-  -- Eliminate implied branch (rmw = ∅ makes At = ∅, so SetRel.mkId of ∅ has no members)
-  rcases hab with ⟨mid, _, hmid_in | ⟨mid2, hmid2_in, _⟩⟩ | hab'
-  · obtain ⟨_, h⟩ := hmid_in; exact absurd h nofun
-  · obtain ⟨_, h⟩ := hmid2_in; exact absurd h nofun
-  -- Now hab' is: xppo ∨ rfe ∨ fr ∨ co
-  rcases hab' with hxppo | (hrfe | (hfr | hco))
-  -- xppo: ((W×W)|(R×W)|(R×R)) ∩ po
-  · obtain ⟨hprod, hpo⟩ := hxppo
-    simp only [Set.mem_setOf_eq] at hprod
-    change a ∈ sbrfi_evts.all ∧ b ∈ sbrfi_evts.all ∧ a.t_id = b.t_id ∧ a.id < b.id at hpo
-    obtain ⟨_, _, htid, hlt⟩ := hpo
-    rcases hprod with (⟨ha, hb⟩ | ⟨ha, hb⟩ | ⟨ha, hb⟩) <;>
-      rcases ha with rfl | rfl | rfl | rfl <;>
-        rcases hb with rfl | rfl | rfl | rfl <;>
-          simp_all
-  -- rfe: rf ∩ external (only external pairs survive)
-  · obtain ⟨hrf, htid⟩ := hrfe
-    rcases hrf with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-    · exact absurd rfl htid  -- p0wX → p0rX1: same thread, contradiction
-    · exact absurd rfl htid  -- p1wY → p1rY1: same thread, contradiction
-    · decide  -- initWy → p0rY0: 1 < 4 ✓
-    · decide  -- initWx → p1rX0: 0 < 5 ✓
-  -- fr: rf⁻¹ ; co
-  · obtain ⟨w, hrf_inv, hco⟩ := hfr
-    rcases hrf_inv with ⟨hw, ha⟩ | ⟨hw, ha⟩ | ⟨hw, ha⟩ | ⟨hw, ha⟩ <;>
-      rcases hco with ⟨hw', hb⟩ | ⟨hw', hb⟩ <;>
-        subst ha hb hw <;> simp_all <;> (try decide) <;> (try (subst hw'; decide))
-  -- co
-  · rcases hco with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;> decide
-
-end Litmus

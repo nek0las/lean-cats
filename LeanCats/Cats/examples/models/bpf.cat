@@ -12,15 +12,8 @@ let RMW = [R & W] & [SC]
  *)
 let SRMW = (SC * SC) & amo
 
-(* Both single and double event atomics when marked with SC act as full
- * barriers:
- * 1. Single event RMW with SC:
- *    [M] -> RMWsc-> [M]
- *
- * 2. Double event RMW with SC:
- *    [M] -> Rsc -> Wsc -> [M]
- *)
-let po_amo_fetch = ([M];po;RMW) | (RMW;po;[M]) | ([M];po;[domain(SRMW)]) | ([range(SRMW)];po;[M])
+(* Ignore the SRCU part *)
+let po_amo_fetch = ([M];po;RMW) | (RMW;po;[M])
 
 show po_amo_fetch as atomicfetch
 

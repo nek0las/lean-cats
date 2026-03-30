@@ -2,3 +2,4 @@ let xppo = ((W*W) | (R*W) | (R*R)) & po
 let At = domain(rmw) | range(rmw)
 let implied = po;[At | F] | [At | F];po
 acyclic (implied | xppo | rfe | fr | co) as tso
+acyclic (po_loc | rf | fr | co) as uniproc
