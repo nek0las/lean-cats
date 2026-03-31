@@ -53,6 +53,21 @@ instance : Coe (TSyntax `predefined_relations) (TSyntax `expr) where
 def SetRel.mkId (s : Set Event) : SetRel Event Event :=
   fun (e₁, e₂) => e₁ = e₂ ∧ e₁ ∈ s
 
+@[simp] theorem SetRel.dom_mkId (s : Set Event) : SetRel.dom (SetRel.mkId s) = s := by
+  ext e
+  constructor
+  · intro h
+    rcases h with ⟨e', heq, hs⟩
+    simpa [SetRel.mkId] using hs
+  · intro hs
+    exact ⟨e, rfl, hs⟩
+
+instance : Coe (Set Event) (SetRel Event Event) where
+  coe := SetRel.mkId
+
+instance : Coe (SetRel Event Event) (Set Event) where
+  coe := SetRel.dom
+
 macro_rules
   | `([dsl-term| $i:cat_ident, $evts, $X, $arg]) =>
     -- Apply the arg instead of using the id in the env.
@@ -91,6 +106,9 @@ macro_rules
 
   | `([expr| $e *, $evts, $X, $arg]) =>
     `(([expr| $e, $evts, $X, $arg]) ∪ {(e₁, e₂) | e₁ = e₂})
+
+  | `([expr| try $e with $_, $evts, $X, $arg]) =>
+    `(([expr| $e, $evts, $X, $arg]))
 
   | `([expr| $e +, $evts, $X, $arg]) =>
     `(([expr| $e, $evts, $X, $arg]))
@@ -165,6 +183,10 @@ macro_rules
     let nm := mkIdent "mb'".toName
     `($X.$nm)
 
+  | `([predefined-relations| SYNC , $_, $X]) =>
+    let nm := mkIdent "SYNC'".toName
+    `($X.$nm)
+
 macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
   | `([keyword| as]) => Lean.Macro.throwUnsupported
@@ -195,6 +217,9 @@ macro_rules
   | `([annotable-events| W, $evts, $X]) =>
     let nm := mkIdent "W".toName
     `(($X.$evts.$nm : Set Event))
+  | `([annotable-events| _, $evts, $X]) =>
+    let nm := mkIdent "all".toName
+    `(($X.$evts.$nm : Set Event))
   | `([annotable-events| R, $evts, $X]) =>
     let nm := mkIdent "R".toName
     `(($X.$evts.$nm : Set Event))
@@ -211,17 +236,14 @@ macro_rules
     let nm := mkIdent "SRCU".toName
     `(($X.$evts.$nm : Set Event))
   | `([annotable-events| M, $evts, $X]) =>
-    let nm := mkIdent "M".toName
-    `(($X.$evts.$nm : Set Event))
+      let reads := mkIdent "R".toName
+      let writes := mkIdent "W".toName
+      `(($X.$evts.$reads ∪ $X.$evts.$writes : Set Event))
 
 macro_rules
   -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
   | `([predefined-events| IW, $evts, $_]) =>
     let nm := mkIdent "IW".toName
-    `($evts.$nm)
-
-  | `([predefined-events| M, $evts, $_]) =>
-    let nm := mkIdent "M".toName
     `($evts.$nm)
 
   | `([predefined-events| $a:annotable_events, $evts, $X]) =>

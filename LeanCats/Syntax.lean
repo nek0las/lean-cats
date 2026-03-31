@@ -63,8 +63,8 @@ syntax "RMW" : annotable_events -- read-modify-write events
 syntax "SRCU" : annotable_events -- srcu events
 syntax "IW" : annotable_events -- initial writes
 syntax "M" : annotable_events -- memory events, M = W ∪ R
+syntax "_" : annotable_events -- all events
 
-syntax "___" : predefined_events -- all events
 syntax annotable_events : predefined_events
 
 /- defined_relations: -/
@@ -83,6 +83,7 @@ syntax "addr" : predefined_relations -- address dependencies, starts with a read
 syntax "rmb" : predefined_relations -- read memory barrier, read -> read
 syntax "wmb" : predefined_relations -- write memory barrier, write -> write
 syntax "fence" : predefined_relations -- fence barrier
+syntax "SYNC" : predefined_relations -- SYNC instruction for mips.
 
 syntax keyword : dsl_term
 syntax num : dsl_term
@@ -111,6 +112,8 @@ syntax:71 expr "^-1" : expr
 syntax dsl_term "(" expr,* ")" : expr
 
 syntax "[" expr "]" : expr
+-- Error handling in OCaml, we can just ignore it.
+syntax "try" expr "with" expr : expr
 
 syntax assertion expr ("as" cat_ident)? : inst
 -- The flag is used to witness the assertion, so it doesn't change the states of the execution, we could just ignore it.

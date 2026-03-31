@@ -234,3 +234,19 @@ theorem fr_co_subset_fr
   simp only [CandidateExecution.fr'] at *
   obtain ⟨w₀, h_inv, h_co⟩ := hfr
   exact ⟨w₀, h_inv, X.preCo.trans w₀ w w' h_co hco⟩
+
+/-- If a function f : Event → ℕ strictly increases along every edge of r,
+    then r is acyclic.  A transitive path can only increase f, so no cycle exists. -/
+lemma acyclic_of_rank
+    {r : SetRel Event Event}
+    (f : Event → ℕ)
+    (hf : ∀ a b, (a, b) ∈ r → f a < f b) :
+    SetRel.Acyclic r := by
+  intro a ha
+  simp only [SetRel.TransGen, Set.mem_setOf_eq] at ha
+  have key : ∀ x y, Relation.TransGen (fun e₁ e₂ => (e₁, e₂) ∈ r) x y → f x < f y := by
+    intro x y hxy
+    induction hxy with
+    | single h => exact hf _ _ h
+    | tail _ h ih => exact Nat.lt_trans ih (hf _ _ h)
+  exact Nat.lt_irrefl _ (key a a ha)

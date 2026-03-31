@@ -72,10 +72,9 @@ structure Events where
   (B : Set Event)
   (F : Set Event)
   (RMW : Set Event)
-  (M : Set Event)
 
 @[simp] def Events.all (evts : Events) :=
-  evts.IW ∪ evts.R ∪ evts.W ∪ evts.B ∪ evts.F ∪ evts.RMW ∪ evts.M
+  evts.IW ∪ evts.R ∪ evts.W ∪ evts.B ∪ evts.F ∪ evts.RMW
 
 instance : Membership Event Events where
   mem := fun es e => e ∈ es.all

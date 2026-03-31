@@ -24,6 +24,10 @@ structure CandidateExecution (evts : Events) where
   ctrl' : SetRel Event Event := ∅
   fence' : SetRel Event Event := ∅
   mb' : SetRel Event Event := ∅
+  SYNC' : Set Event := ∅
+  -- Specific fence event sets depend on the test architecture,
+  -- their name is always uppercase and derives from the mnemonic of the instruction that generates them.
+  syncInF : ∀ (e : Event), e ∈ SYNC' → e ∈ evts.F
   uniqueId : ∀ (e₁ e₂ : Event),
     e₁ ∈ evts.all → e₂ ∈ evts.all
     -> e₁ ≠ e₂
@@ -34,11 +38,6 @@ structure CandidateExecution (evts : Events) where
     (w, r) ∈ rf'
     → w.t_id = r.t_id
     → (w, r) ∈ evts.po
-  coWR : ∀ (w r w' : Event),
-    (w, r) ∈ evts.po
-    → w.effect.location = r.effect.location
-    → (w', r) ∈ rf'
-    → (w, w') ∈ co' ∨ w = w'
 
 /-- from-reads: always defined as rf⁻¹ ; co, so it is transparent to the kernel. -/
 @[simp] def CandidateExecution.fr' {evts : Events} (X : CandidateExecution evts) : SetRel Event Event :=

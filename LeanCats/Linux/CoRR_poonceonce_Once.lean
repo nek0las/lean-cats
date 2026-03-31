@@ -29,10 +29,10 @@ abbrev x := 0
 @[simp] abbrev p1r0 : Data.Event :=
   Data.Event.mk 2 1 rOpX1 ⟨lkmm.Accesses, lkmm.Accesses.ONCE'⟩
 @[simp] abbrev p1r1 : Data.Event :=
-  Data.Event.mk 3 2 rOpX0 ⟨lkmm.Accesses, lkmm.Accesses.ONCE'⟩
+  Data.Event.mk 3 1 rOpX0 ⟨lkmm.Accesses, lkmm.Accesses.ONCE'⟩
 
 @[simp] abbrev corr_evts : Data.Events :=
-  Data.Events.mk {initWx} {p1r0, p1r1} {initWx, p0wX} {} {} {} {}
+  Data.Events.mk {initWx} {p1r0, p1r1} {initWx, p0wX} {} {} {}
 
 @[simp] def corr_co : SetRel Event Event := {(initWx, p0wX)}
 @[simp] def corr_po : SetRel Event Event := {(p1r0, p1r1)}
@@ -65,16 +65,19 @@ Chosen rf edges: `p0wX -> p1r0` and `initWx -> p1r1`. -/
 
 def corr_test : CandidateExecution corr_evts :=
   {
+    evts := corr_evts
     po' := corr_po
     prePo := by candidateExecution_wf
     rf' := corr_rf
     rfInst := corr_rfInst
     co' := corr_co
+    rmw' := ∅
     preRMW := instWellformedRmwEmpty corr_evts
+    syncInF := by
+      intro e h
+      contradiction
     uniqueId := uniqueId_by_id corr_evts
     rfiPo := by
-      candidateExecution_wf
-    coWR := by
       candidateExecution_wf
   }
 

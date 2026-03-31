@@ -1,0 +1,81 @@
+(*************)
+(* Utilities *)
+(*************)
+
+(* Single event atomic ops are marked with both R and W.
+ * These events are marked with SC if the op returns a value.
+ *)
+let RMW = [R & W] & [SC]
+
+(* Atomic ops with separate R and W events are related by the amo relation.
+ * both of these R and W events are  marked with SC if the op returns a value.
+ *)
+let SRMW = (SC * SC) & amo
+
+(* Ignore the SRCU part *)
+let po_amo_fetch = ([M];po;RMW) | (RMW;po;[M])
+
+show po_amo_fetch as atomicfetch
+
+(* Release Consistency processor consistent (RCpc) *)
+let load_acquire = ([AQ];po;[M])
+let store_release = ([M];po;[RL])
+let rcpc = load_acquire | store_release
+
+(****************)
+(* Dependencies *)
+(****************)
+
+let addr_dep = [R];addr;[M]
+let data_dep = [R];data;[W]
+let ctrl_dep = [R];ctrl;[W]
+
+show addr_dep as addr
+show data_dep as data
+show ctrl_dep as ctrl
+
+(**********************)
+(* ppo and prop rules *)
+(**********************)
+
+(* Compute coherence relation *)
+include "cos-opt.cat"
+let com = co | rf | fr
+
+let ppo =
+(* Explicit synchronization *)
+ po_amo_fetch | rcpc
+(* Syntactic Dependencies *)
+| addr_dep
+| data_dep
+| ctrl_dep
+(* Pipeline Dependencies *)
+| [M];(addr|data);[W];rfi;[R]
+| [M];addr;[M];po;[W]
+(* Overlapping-address ordering *)
+| (coi | fri)
+
+(* Propagation ordering from SC and release operations *)
+let A-cumul = rfe? ; (po_amo_fetch | store_release)
+let prop = (coe | fre)? ; A-cumul* ; rfe?
+
+(**********)
+(* Axioms *)
+(**********)
+
+(* Sc per location *)
+acyclic com | po-loc as Coherence
+
+(* No-Thin-Air and Observation *)
+let hb = ppo | rfe | ((prop \ id) & int)
+acyclic hb as Happens-before
+
+(* Propagation *)
+let pb = prop ; po_amo_fetch ; hb*
+acyclic pb as Propagation
+
+(* Atomicity *)
+empty rmw & (fre;coe) as Atomic
+
+(* Atomic fetch as a fence *)
+acyclic po_amo_fetch | com

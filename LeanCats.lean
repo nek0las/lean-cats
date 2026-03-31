@@ -9,6 +9,7 @@ import LeanCats.CatPreprocessor
 import LeanCats.Macro
 import LeanCats.Theorems
 import LeanCats.TsoWeakerThanSc
+import LeanCats.mipsWeakerThanTSO
 import LeanCats.ModelReader
 import LeanCats.Litmus
 import LeanCats.LitmusParser
@@ -16,3 +17,4 @@ import LeanCats.LitmusGraph
 import LeanCats.LitmusGraphBridge
 import LeanCats.LitmusReader
 import LeanCats.Linux.CoRR_poonceonce_Once
+import LeanCats.Linux.X86_SB_rfi_pos

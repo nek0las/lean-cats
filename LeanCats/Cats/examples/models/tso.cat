@@ -1,0 +1,8 @@
+include "cos.cat"
+
+empty rmw & (fre;coe)
+
+let xppo = ((W*W) | (R*W) | (R*R)) & po
+let At = domain(rmw) | range(rmw)
+let implied = po;[At | F] | [At | F];po
+acyclic (implied | xppo | rfe | fr | co) as tso
