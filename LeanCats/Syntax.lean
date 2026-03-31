@@ -110,6 +110,7 @@ syntax expr "?" : expr
 syntax:71 expr "^-1" : expr
 -- The procedure will return a value, so we can use it in the expression.
 syntax dsl_term "(" expr,* ")" : expr
+
 syntax "[" expr "]" : expr
 -- Error handling in OCaml, we can just ignore it.
 syntax "try" expr "with" expr : expr

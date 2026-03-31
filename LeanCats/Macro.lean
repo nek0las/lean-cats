@@ -431,3 +431,11 @@ acyclic pb as propagation
 #reduce lkmm.atomic
 #reduce lkmm.happens_before
 #reduce lkmm.propagation
+
+[model| tso_x86
+
+let xppo = ((W*W) | (R*W) | (R*R)) & po
+let At = domain(rmw) | range(rmw)
+let implied = po;[At | F] | [At | F];po
+acyclic (implied | xppo | rfe | fr | co) as tso
+]
