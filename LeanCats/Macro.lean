@@ -277,7 +277,7 @@ macro_rules
     -- Create unqualified aliases, e.g. `ONCE` → `Accesses.ONCE`.
     let aliases <- tagIdents.mapM fun (tagId : TSyntax `ident) => do
       let qualName := mkIdent (nmIdent.getId ++ tagId.getId)
-      `(def $tagId := $qualName)
+      `(@[simp] def $tagId := $qualName)
     let ret := #[indef] ++ aliases
     return mkNullNode ret
 

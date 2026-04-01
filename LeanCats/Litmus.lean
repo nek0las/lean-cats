@@ -57,7 +57,6 @@ abbrev y := 1
   B := {}
   F := {}
   RMW := {}
-  M := {}
 }
 
 @[simp] def co : SetRel Event Event := {(initWx, inst1writeX), (initWy, inst3writeY)}
@@ -76,6 +75,8 @@ instance : wellformed.co evtsInput co where
   }
 
 @[simp] def test1 : CandidateExecution evtsInput := {
+  evts := evtsInput
+  po' := evtsInput.po
   prePo := instWellformedPo evtsInput
   uniqueId := uniqueId_by_id evtsInput
   rf' := {(initWy, inst2readY), (initWx, inst4readX)}
@@ -102,8 +103,10 @@ instance : wellformed.co evtsInput co where
   ctrl' := ∅
   fence' := ∅
   addr' := ∅
+  syncInF := by
+    intro e h
+    contradiction
   rfiPo := by candidateExecution_wf
-  coWR := by candidateExecution_wf
 }
 
 /-- The SB candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:
@@ -172,7 +175,6 @@ theorem FindCycle : ¬ CatRel.SetRel.Acyclic (test1.co' ∪ test1.rf' ∪ test1.
   B   := {}
   F   := {}
   RMW := {}
-  M   := {}
 }
 
 @[simp] def mp_co : SetRel Event Event := {(mp_initWx, mp_writeX), (mp_initWy, mp_writeY)}
@@ -187,6 +189,8 @@ instance : wellformed.co mp_evts mp_co where
 
 -- rf: mp_readY sees y=1 from mp_writeY; mp_readX sees x=0 from mp_initWx
 @[simp] def mp_test : CandidateExecution mp_evts := {
+  evts := mp_evts
+  po' := mp_evts.po
   prePo := instWellformedPo mp_evts
   uniqueId := uniqueId_by_id mp_evts
   rf'       := {(mp_writeY, mp_readY), (mp_initWx, mp_readX)}
@@ -213,8 +217,10 @@ instance : wellformed.co mp_evts mp_co where
   ctrl' := ∅
   fence' := ∅
   addr' := ∅
+  syncInF := by
+    intro e h
+    contradiction
   rfiPo := by candidateExecution_wf
-  coWR := by candidateExecution_wf
 }
 
 /-- The MP candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:
@@ -282,7 +288,6 @@ theorem mp_FindCycle : ¬ CatRel.SetRel.Acyclic (mp_test.co' ∪ mp_test.rf' ∪
   B   := {}
   F   := {}
   RMW := {}
-  M   := {}
 }
 
 @[simp] def lb_co : SetRel Event Event := {(lb_initWx, lb_writeX), (lb_initWy, lb_writeY)}
@@ -297,6 +302,8 @@ instance : wellformed.co lb_evts lb_co where
 
 -- rf: lb_readX sees x=1 from lb_writeX; lb_readY sees y=1 from lb_writeY
 @[simp] def lb_test : CandidateExecution lb_evts := {
+  evts := lb_evts
+  po' := lb_evts.po
   prePo := instWellformedPo lb_evts
   uniqueId := uniqueId_by_id lb_evts
   rf'       := {(lb_writeX, lb_readX), (lb_writeY, lb_readY)}
@@ -323,8 +330,10 @@ instance : wellformed.co lb_evts lb_co where
   ctrl' := ∅
   fence' := ∅
   addr' := ∅
+  syncInF := by
+    intro e h
+    contradiction
   rfiPo := by candidateExecution_wf
-  coWR := by candidateExecution_wf
 }
 
 /-- The LB candidate execution has a cycle in `co ∪ rf ∪ fr ∪ po`:

@@ -10,8 +10,6 @@ import LeanCats.Basic
 defcat <"mips.cat">
 defcat <"tsox.cat">
 
--- In this litmus test, we want to show that sometimes the X86 is weaker than mips because of the sc-per-location.
-
 open Data
 
 namespace Litmus

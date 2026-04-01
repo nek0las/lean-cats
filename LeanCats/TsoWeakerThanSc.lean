@@ -4,14 +4,14 @@ import LeanCats.Data
 import LeanCats.Relations
 import LeanCats.Theorems
 import LeanCats.Basic
+import LeanCats.mipsWeakerThanTSO
 
-defcat <"tso.cat">
 defcat <"sc.cat">
 
 theorem scvtso
   (evts : Data.Events)
   (X : CandidateExecution evts)
-  : sc.sc evts X → tso.tso evts X :=
+  : sc.sc evts X → tsox.tso evts X :=
 by
   unfold sc.sc
   simp
