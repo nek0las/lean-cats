@@ -2,16 +2,6 @@
 (* Utilities *)
 (*************)
 
-(* Single event atomic ops are marked with both R and W.
- * These events are marked with SC if the op returns a value.
- *)
-let RMW = [R & W] & [SC]
-
-(* Atomic ops with separate R and W events are related by the amo relation.
- * both of these R and W events are  marked with SC if the op returns a value.
- *)
-let SRMW = (SC * SC) & amo
-
 (* Ignore the SRCU part *)
 let po_amo_fetch = ([M];po;RMW) | (RMW;po;[M])
 
@@ -78,4 +68,4 @@ acyclic pb as Propagation
 empty rmw & (fre;coe) as Atomic
 
 (* Atomic fetch as a fence *)
-acyclic po_amo_fetch | com
+acyclic po_amo_fetch | com as fetch_fence

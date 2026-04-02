@@ -353,11 +353,15 @@ macro_rules
 
 @[simp] def fre (evts : Events) (X : CandidateExecution evts) := X.fr' ∩ CatRel.Rel.external
 
+@[simp] def fri (evts : Events) (X : CandidateExecution evts) := X.fr' ∩ CatRel.Rel.internal
+
 @[simp] def rfe (evts : Events) (X : CandidateExecution evts) := X.rf' ∩ CatRel.Rel.external
 
 @[simp] def rfi (evts : Events) (X : CandidateExecution evts) := X.rf' ∩ CatRel.Rel.internal
 
 @[simp] def coe (evts : Events) (X : CandidateExecution evts) := X.co' ∩ CatRel.Rel.external
+
+@[simp] def coi (evts : Events) (X : CandidateExecution evts) := X.co' ∩ CatRel.Rel.internal
 
 @[simp] def int (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
 
@@ -438,4 +442,43 @@ let xppo = ((W*W) | (R*W) | (R*R)) & po
 let At = domain(rmw) | range(rmw)
 let implied = po;[At | F] | [At | F];po
 acyclic (implied | xppo | rfe | fr | co) as tso
+]
+
+[model| bpf
+let po_amo_fetch = ([M];po;RMW) | (RMW;po;[M])
+
+let load_acquire = ([lkmm.ACQUIRE];po;[M])
+let store_release = ([M];po;[lkmm.RELEASE])
+let rcpc = load_acquire | store_release
+
+let addr_dep = [R];addr;[M]
+let data_dep = [R];data;[W]
+let ctrl_dep = [R];ctrl;[W]
+
+let com = co | rf | fr
+
+let ppo =
+ po_amo_fetch | rcpc
+| addr_dep
+| data_dep
+| ctrl_dep
+| [M];(addr|data);[W];rfi;[R]
+| [M];addr;[M];po;[W]
+| (coi | fri)
+
+let A-cumul = (rfe)? ; (po_amo_fetch | store_release)
+let prop = (coe | fre)? ; A-cumul* ; (rfe)?
+
+acyclic com | po-loc as Coherence
+
+let hb = ppo | rfe | ((prop \ id) & int)
+acyclic hb as Happens-before
+
+let pb = prop ; po_amo_fetch ; hb*
+
+-- acyclic pb as Propagation
+
+-- empty rmw & (fre;coe) as Atomic
+
+-- acyclic po_amo_fetch | com as fetch_fence
 ]

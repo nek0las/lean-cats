@@ -1,0 +1,53 @@
+enum Accesses = ONCE' ||
+  RELEASE'  ||
+  ACQUIRE'  ||
+  NORETURN'  ||
+  MB'
+instructions {R, W, RMW}[Accesses]
+
+enum Barriers = wmb'  ||
+  rmb'  ||
+  barrier'
+
+instructions {F}[Barriers]
+
+let FailedRMW = RMW \ (domain(rmw) | range(rmw))
+let Acquire = ACQUIRE \ W \ FailedRMW
+let Release = RELEASE \ R \ FailedRMW
+let Mb = MB \ FailedRMW
+let Noreturn = NORETURN \ W
+
+let Marked = (~M) | IW | ONCE | RELEASE | ACQUIRE | MB | RMW
+
+let Plain = M \ Marked
+
+let strong_fence = mb
+
+let acq_po = [Acquire] ; po ; [M]
+let po_rel = [M] ; po ; [Release]
+
+let com = rf | co | fr
+acyclic po_loc | com as coherence
+
+empty rmw & (fre ; coe) as atomic
+
+let dep = addr | data
+let rwdep = (dep | ctrl) ; [W]
+let overwrite = co | fr
+let to_w = rwdep | (overwrite & int) | (addr ; [Plain] ; wmb)
+let to_r = addr | (dep ; [Marked] ; rfi)
+let ppo = to_r | to_w | fence
+
+let A_cumul(r) = (rfe ; [Marked])? ; r
+
+let a = A_cumul(po_rel)
+
+let cumul_fence = [Marked] ; (A_cumul(strong_fence | po_rel) | wmb) ; [Marked]
+let prop = [Marked] ; (overwrite & ext)? ; cumul_fence* ; [Marked] ; (rfe)? ; [Marked]
+
+let hb = [Marked] ; (ppo | rfe | ((prop \ id) & int)) ; [Marked]
+
+acyclic hb as happens_before
+
+let pb = prop ; strong_fence ; hb* ; [Marked]
+acyclic pb as propagation
