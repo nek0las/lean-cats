@@ -25,7 +25,9 @@ syntax "[dsl-term|" dsl_term "," cat_ident "," cat_ident "," cat_ident "]" : ter
 partial def catIdentToName (stx : Syntax) : Name :=
   let rec go (s : Syntax) : Array String :=
     if s.isIdent then #[s.getId.toString]
-    else if s.isAtom then #[]  -- skip punctuation atoms like "'" and "-"
+    else if s.isAtom then
+      let atom := s.getAtomVal
+      if atom = "'" || atom = "-" then #[] else #[atom]
     else s.getArgs.foldl (fun acc a => acc ++ go a) #[]
   let parts := go stx
   match parts with
@@ -472,6 +474,7 @@ let prop = (coe | fre)? ; A-cumul* ; (rfe)?
 acyclic com | po-loc as Coherence
 
 let hb = ppo | rfe | ((prop \ id) & int)
+
 acyclic hb as Happens-before
 
 let pb = prop ; po_amo_fetch ; hb*

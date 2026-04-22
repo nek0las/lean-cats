@@ -14,6 +14,7 @@ declare_syntax_cat constraint
 declare_syntax_cat annotable_events
 declare_syntax_cat predefined_events
 declare_syntax_cat predefined_relations
+declare_syntax_cat cat_ident_part
 declare_syntax_cat cat_ident
 declare_syntax_cat procedure_call
 
@@ -90,8 +91,14 @@ syntax num : dsl_term
 syntax "(" expr ")" : dsl_term
 syntax cat_ident : dsl_term
 
+syntax ident : cat_ident_part
+syntax predefined_events : cat_ident_part
+syntax predefined_relations : cat_ident_part
+
 syntax ident : cat_ident
-syntax ident ("-" ident)+ : cat_ident
+syntax ident ("-" cat_ident_part)+ : cat_ident
+syntax predefined_events ("-" cat_ident_part)+ : cat_ident
+syntax predefined_relations ("-" cat_ident_part)+ : cat_ident
 
 syntax dsl_term:51 : expr
 
@@ -105,7 +112,6 @@ syntax:70 expr "*" : expr -- Reflexive Transitive Closure.
 syntax:70 expr "+" : expr -- Transitive Closure.
 syntax expr "^" expr : expr
 syntax expr "+" expr : expr
-syntax expr "-" expr : expr
 syntax expr "?" : expr
 syntax:71 expr "^-1" : expr
 -- The procedure will return a value, so we can use it in the expression.

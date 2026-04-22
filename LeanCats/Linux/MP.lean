@@ -96,7 +96,17 @@ instance : wellformed.co mp_evts mp_co where
     co' := mp_co
     rmw' := ∅
     preRMW := instWellformedRmwEmpty mp_evts
-    uniqueId := uniqueId_by_id mp_evts
+    idUnique := by
+      intro e₁ e₂ hmem hne
+      rcases hmem with ⟨he₁, he₂⟩
+      change e₁ ∈ mp_evts.all at he₁
+      change e₂ ∈ mp_evts.all at he₂
+      simp [Data.Events.all] at he₁ he₂
+      rcases he₁ with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+      rcases he₂ with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+      first
+        | cases hne rfl
+        | decide
     syncInF := by
       intro e h
       contradiction
