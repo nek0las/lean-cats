@@ -8,9 +8,6 @@ import LeanCats.Theorems
 import LeanCats.Basic
 
 defcat <"mips.cat">
-defcat <"tsox.cat">
-
-set_option maxHeartbeats 2000000
 
 open Data
 
@@ -117,7 +114,7 @@ instance : wellformed.co sbrfi_evts sbrfi_co where
     co' := sbrfi_co
     rmw' := ∅
     preRMW := instWellformedRmwEmpty sbrfi_evts
-    uniqueId := uniqueId_by_id sbrfi_evts
+    idUnique := uniqueId_by_id
     syncInF := by
       intro e h
       contradiction

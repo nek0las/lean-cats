@@ -4,7 +4,6 @@ import LeanCats.Macro
 import LeanCats.Theorems
 
 open Data
-
 namespace LinuxLitmus
 
 instance instWellformedRmwEmpty (evts : Data.Events) : wellformed.rmw evts (∅ : SetRel Event Event) := by
@@ -76,7 +75,7 @@ def corr_test : CandidateExecution corr_evts :=
     syncInF := by
       intro e h
       contradiction
-    uniqueId := uniqueId_by_id corr_evts
+    idUnique := uniqueId_by_id
     rfiPo := by
       candidateExecution_wf
   }

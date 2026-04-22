@@ -9,7 +9,9 @@ This definination is different with the formal semantics, because the `co` is de
 by computation, so should declare it as the base relation. -/
 structure CandidateExecution (evts : Events) where
   evts := evts
-  idUnique := ∀ e₁ e₂ : Event, (e₁ ∈ evts ∧ e₂ ∈ evts) -> e₁.id ≠ e₂.id
+  idUnique : ∀ (e₁ e₂ : Event),
+    e₁ ∈ evts.all → e₂ ∈ evts.all →
+    e₁ ≠ e₂ → e₁.id ≠ e₂.id
   po'   := evts.po
   [prePo: wellformed.po po']
   rf'   : SetRel Event Event := ∅
@@ -28,12 +30,6 @@ structure CandidateExecution (evts : Events) where
   -- Specific fence event sets depend on the test architecture,
   -- their name is always uppercase and derives from the mnemonic of the instruction that generates them.
   syncInF : ∀ (e : Event), e ∈ SYNC' → e ∈ evts.F
-  uniqueId : ∀ (e₁ e₂ : Event),
-    e₁ ∈ evts.all → e₂ ∈ evts.all
-    -> e₁ ≠ e₂
-    → e₁.id ≠ e₂.id
-  -- Internal reads-from implies program order: if a write and its read
-  -- are on the same thread, the write must precede the read in po.
   rfiPo : ∀ (w r : Event),
     (w, r) ∈ rf'
     → w.t_id = r.t_id
@@ -43,11 +39,25 @@ structure CandidateExecution (evts : Events) where
 @[simp] def CandidateExecution.fr' {evts : Events} (X : CandidateExecution evts) : SetRel Event Event :=
   X.rf'.inv.comp X.co'
 
-/-- The `uniqueId` field of any `CandidateExecution`: since `event_id_unique` makes identity
-    determined solely by ID, any two distinct events must have distinct IDs. -/
-theorem uniqueId_by_id (evts : Events) :
-    ∀ (e₁ e₂ : Event), e₁ ∈ evts.all → e₂ ∈ evts.all → e₁ ≠ e₂ → e₁.id ≠ e₂.id :=
-  fun _ _ _ _ hne hid => hne (Data.event_id_unique _ _ hid)
+/-- Solve the `idUnique` obligation for concrete finite event sets built from
+    explicit event literals. -/
+macro "candidateExecution_idUnique" : tactic =>
+  `(tactic|
+    (all_goals repeat first
+      | simp [Data.Events.all] at *
+      | (casesm _ ∨ _)
+      | subst_vars
+      | contradiction
+      | omega
+      | decide
+      | aesop))
+
+/-- Helper term for concrete candidate executions whose event sets are given by
+    explicit finite set literals. -/
+macro "uniqueId_by_id" : term =>
+  `(by
+    intro e₁ e₂ he₁ he₂ hne
+    candidateExecution_idUnique)
 
 /-- Tactic for proving the `rfiPo` and `coWR` obligations of a `CandidateExecution`
     for concrete litmus tests with finite event sets.

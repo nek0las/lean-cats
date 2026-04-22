@@ -9,7 +9,6 @@ import LeanCats.Basic
 import LeanCats.mipsWeakerThanTSO
 
 -- In this litmus test, we want to show that sometimes the X86 is weaker than mips because of the sc-per-location.
-
 -- init x = 0
 --
 -- t0        t1
@@ -122,7 +121,7 @@ instance : wellformed.co sb_evts sb_co where
     co' := sb_co
     rmw' := ∅
     preRMW := instWellformedRmwEmpty sb_evts
-    uniqueId := uniqueId_by_id sb_evts
+    idUnique := uniqueId_by_id
     syncInF := by
       intro e h
       contradiction

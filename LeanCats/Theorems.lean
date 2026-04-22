@@ -8,61 +8,19 @@ open Data
 
 -- Relation composition (Relation sequence in cat definition).
 lemma internalImpliesPoOrPoMinusOne {e₁ e₂ : Event} (evts : Events) :
-  internal evts e₁ e₂ -> e₁ ≠ e₂ -> po evts e₁ e₂ ∨ po evts e₂ e₁ :=
-  by
-    simp
-    intros he₁in he₂in htideq hneq
-    simp [po]
-    have hidneq : e₁.id ≠ e₂.id :=
-      by
-        intro hideq
-        apply hneq
-        apply Iff.mpr
-        have h : e₁ = e₂ :=
-          by apply (event_id_unique e₁ e₂ hideq)
-
-        apply Iff.intro
-        {
-          intro h'
-          exact h'
-        }
-        {
-          intro h'
-          exact h'
-        }
-        have h : e₁ = e₂ :=
-          by apply (event_id_unique e₁ e₂ hideq)
-
-        contradiction
-
-    have hle_or_gt : e₁.id < e₂.id ∨ e₁.id > e₂.id :=
-      by
-        apply Iff.mp
-        apply Nat.ne_iff_lt_or_gt
-        exact hidneq
-
-    induction hle_or_gt with
-    | inl h => {
-      apply Or.inl
-      apply And.intro
-      {
-        aesop
-      }
-      {
-        exact h
-      }
-    }
-    | inr h => {
-      apply Or.inr
-      apply And.intro
-      {
-        simp [Eq.comm]
-        aesop
-      }
-      {
-        aesop
-      }
-    }
+  (hidUnique : ∀ (a b : Event),
+    a ∈ evts.all → b ∈ evts.all →
+    a ≠ b → a.id ≠ b.id) ->
+  internal evts e₁ e₂ -> e₁ ≠ e₂ -> po evts e₁ e₂ ∨ po evts e₂ e₁ := by
+    intro hidUnique
+    rintro ⟨he₁in, he₂in, htideq⟩ hneq
+    have hidneq : e₁.id ≠ e₂.id := hidUnique e₁ e₂ he₁in he₂in hneq
+    have hlt_or_gt : e₁.id < e₂.id ∨ e₂.id < e₁.id := Nat.lt_or_gt_of_ne hidneq
+    rcases hlt_or_gt with hlt | hgt
+    · left
+      exact ⟨⟨he₁in, he₂in, htideq⟩, hlt⟩
+    · right
+      exact ⟨⟨he₂in, he₁in, htideq.symm⟩, hgt⟩
 
 -- lemma rfAndFrIsCo (evts : Events) (co : Events -> Rel Event Event) (e₁ e₂ e₃ : Event) :
 --   (rf.wellformed evts e₁ e₂ ∧ fr evts co e₂ e₃) -> co evts e₁ e₃ :=

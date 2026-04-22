@@ -4,7 +4,6 @@ import LeanCats.Macro
 import LeanCats.Theorems
 
 open Data
-
 namespace LinuxLitmus
 
 instance instWellformedPo (evts : Data.Events) : wellformed.po evts.po := by
@@ -104,7 +103,7 @@ instance : wellformed.co iriw_evts iriw_co where
     rmw' := ∅
     preRMW := instWellformedRmwEmpty iriw_evts
     mb' := iriw_mb
-    uniqueId := uniqueId_by_id iriw_evts
+    idUnique := uniqueId_by_id
     syncInF := by
       intro e h
       contradiction

@@ -78,7 +78,7 @@ instance : wellformed.co evtsInput co where
   evts := evtsInput
   po' := evtsInput.po
   prePo := instWellformedPo evtsInput
-  uniqueId := uniqueId_by_id evtsInput
+  idUnique := uniqueId_by_id
   rf' := {(initWy, inst2readY), (initWx, inst4readX)}
   rfInst := {
     wellTyped := by
@@ -92,7 +92,7 @@ instance : wellformed.co evtsInput co where
       rcases h1 with ⟨hw1, hr1⟩ | ⟨hw1, hr1⟩ <;>
       rcases h2 with ⟨hw2, hr2⟩ | ⟨hw2, hr2⟩ <;>
       subst hw1 hw2 <;>
-      first | rfl | exact absurd (hr1 ▸ hr2) (by decide)
+      first | rfl | exact absurd (hr1 ▸ hr2) (Data.Event.ne_of_id_ne (by decide))
   }
   co' := co
   rmw' := ∅
@@ -192,7 +192,7 @@ instance : wellformed.co mp_evts mp_co where
   evts := mp_evts
   po' := mp_evts.po
   prePo := instWellformedPo mp_evts
-  uniqueId := uniqueId_by_id mp_evts
+  idUnique := uniqueId_by_id
   rf'       := {(mp_writeY, mp_readY), (mp_initWx, mp_readX)}
   rfInst   := {
     wellTyped := by
@@ -206,7 +206,7 @@ instance : wellformed.co mp_evts mp_co where
       rcases h1 with ⟨hw1, hr1⟩ | ⟨hw1, hr1⟩ <;>
       rcases h2 with ⟨hw2, hr2⟩ | ⟨hw2, hr2⟩ <;>
       subst hw1 hw2 <;>
-      first | rfl | exact absurd (hr1 ▸ hr2) (by decide)
+      first | rfl | exact absurd (hr1 ▸ hr2) (Data.Event.ne_of_id_ne (by decide))
   }
   co'       := mp_co
   rmw'      := ∅
@@ -305,7 +305,7 @@ instance : wellformed.co lb_evts lb_co where
   evts := lb_evts
   po' := lb_evts.po
   prePo := instWellformedPo lb_evts
-  uniqueId := uniqueId_by_id lb_evts
+  idUnique := uniqueId_by_id
   rf'       := {(lb_writeX, lb_readX), (lb_writeY, lb_readY)}
   rfInst   := {
     wellTyped := by
@@ -319,7 +319,7 @@ instance : wellformed.co lb_evts lb_co where
       rcases h1 with ⟨hw1, hr1⟩ | ⟨hw1, hr1⟩ <;>
       rcases h2 with ⟨hw2, hr2⟩ | ⟨hw2, hr2⟩ <;>
       subst hw1 hw2 <;>
-      first | rfl | exact absurd (hr1 ▸ hr2) (by decide)
+      first | rfl | exact absurd (hr1 ▸ hr2) (Data.Event.ne_of_id_ne (by decide))
   }
   co'       := lb_co
   rmw'      := ∅

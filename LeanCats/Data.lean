@@ -31,21 +31,13 @@ structure Event where
 inductive RMW where
   | trmw
 
--- Unsafe.
-axiom event_id_unique :
-  ∀ e₁ e₂ : Event, e₁.id = e₂.id -> e₁ = e₂
-
-instance : DecidableEq Event := by
-  intro a b
-  by_cases h : a.id = b.id
-  · exact isTrue (event_id_unique a b h)
-  · exact isFalse (by
-      intro hEq
-      have : a.id = b.id := by simp [hEq]
-      exact h this)
-
 instance : BEq Event where
   beq e1 e2 := e1.id == e2.id
+
+theorem Event.ne_of_id_ne {e₁ e₂ : Event} (hid : e₁.id ≠ e₂.id) : e₁ ≠ e₂ := by
+  intro heq
+  apply hid
+  simpa [heq]
 
 inductive Normal where
 | none : Normal
