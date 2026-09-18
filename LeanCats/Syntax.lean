@@ -105,7 +105,7 @@ syntax dsl_term:51 : expr
 syntax:51 expr:51 "|" expr:50 : expr
 syntax "~" expr : expr
 syntax expr "&" expr : expr
-syntax expr ";" expr : expr
+syntax:61 expr:61 ";" expr:60 : expr
 syntax expr "\\" expr : expr
 syntax:60 expr:60 "*" expr:61 : expr
 syntax:70 expr "*" : expr -- Reflexive Transitive Closure.

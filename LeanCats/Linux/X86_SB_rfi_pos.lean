@@ -8,6 +8,7 @@ import LeanCats.Theorems
 import LeanCats.Basic
 
 defcat <"mips.cat">
+defcat <"tsox.cat">
 
 open Data
 

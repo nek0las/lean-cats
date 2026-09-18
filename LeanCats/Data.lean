@@ -34,11 +34,6 @@ inductive RMW where
 instance : BEq Event where
   beq e1 e2 := e1.id == e2.id
 
-theorem Event.ne_of_id_ne {e₁ e₂ : Event} (hid : e₁.id ≠ e₂.id) : e₁ ≠ e₂ := by
-  intro heq
-  apply hid
-  simpa [heq]
-
 inductive Normal where
 | none : Normal
 

@@ -219,9 +219,6 @@ macro_rules
   | `([annotable-events| W, $evts, $X]) =>
     let nm := mkIdent "W".toName
     `(($X.$evts.$nm : Set Event))
-  | `([annotable-events| _, $evts, $X]) =>
-    let nm := mkIdent "all".toName
-    `(($X.$evts.$nm : Set Event))
   | `([annotable-events| R, $evts, $X]) =>
     let nm := mkIdent "R".toName
     `(($X.$evts.$nm : Set Event))
@@ -241,6 +238,9 @@ macro_rules
       let reads := mkIdent "R".toName
       let writes := mkIdent "W".toName
       `(($X.$evts.$reads ∪ $X.$evts.$writes : Set Event))
+  | `([annotable-events| _, $evts, $X]) =>
+    let nm := mkIdent "all".toName
+    `(($X.$evts.$nm : Set Event))
 
 macro_rules
   -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
@@ -318,13 +318,14 @@ def elabCatInst : CommandElab := fun stx => do
         else
           let ctorDef <- `({e | e.tag = ⟨$(mkIdent typeName), $(mkIdent ctor)⟩ })
 
-          let inters : TSyntax `term ← a.getElems.foldlM
+          let annotableUnion : TSyntax `term ← a.getElems.foldlM
             (fun (acc : TSyntax `term) (ae_i : TSyntax `annotable_events) => do
-            `( $acc ∩ [annotable-events| $ae_i, $evts, $X] )) ctorDef
+              `( $acc ∪ [annotable-events| $ae_i, $evts, $X] ))
+            (← `((∅ : Set Event)))
 
           let ctorDef <- `(
             abbrev $(mkIdent ctorName) :
-              Set Event := $inters
+              Set Event := $ctorDef ∩ $annotableUnion
           )
           return ctorDef
         )

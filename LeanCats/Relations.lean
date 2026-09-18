@@ -45,6 +45,7 @@ class CatUnion (α : Type*) where
 
 @[reducible] instance : CatUnion (SetRel Event Event) where union := CatRel.SetRel.union
 
+
 abbrev SetRel.ReflexiveTrans (r : SetRel Event Event) :=
   {(e₁, e₂) | Relation.ReflTransGen (λ a b ↦ (a, b) ∈ r) e₁ e₂}
 

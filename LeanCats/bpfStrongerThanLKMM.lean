@@ -15,14 +15,17 @@ open CatRel Data
 lemma coi_subset_bpf_ppo (evts : Data.Events) (X : CandidateExecution evts) :
     ∀ a b, (a, b) ∈ coi evts X → (a, b) ∈ bpf.ppo evts X := by
   intro a b h
-  simp only [bpf.ppo, CatRel.CatUnion.union]
-  exact Or.inr (Or.inl h)
+  unfold bpf.ppo
+  iterate 7 right
+  apply Or.intro_left
+  exact h
 
 lemma fri_subset_bpf_ppo (evts : Data.Events) (X : CandidateExecution evts) :
     ∀ a b, (a, b) ∈ fri evts X → (a, b) ∈ bpf.ppo evts X := by
   intro a b h
-  simp only [bpf.ppo, CatRel.CatUnion.union]
-  exact Or.inr (Or.inr h)
+  unfold bpf.ppo
+  repeat apply Or.intro_right
+  exact h
 
 -- ---------------------------------------------------------------------------
 -- lkmm.ppo ⊆ bpf.hb

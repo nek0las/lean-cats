@@ -51,11 +51,9 @@ by
         have hmidF : mid ∈ X.evts.F := hsyncInF hmidSYNC
         have himplied_ab : (a, b) ∈ tsox.implied evts X := by
           unfold tsox.implied
-          simp [CatRel.CatUnion.union]
-          refine ⟨mid, hpo_amid, ?_⟩
-          refine Or.inr ?_
-          refine ⟨mid, ?_, hpo_midb⟩
-          exact ⟨rfl, Or.inr hmidF⟩
+          simp
+
+
         have hstep : (a, b) ∈ rtso := by
           exact Or.inl himplied_ab
         exact Relation.TransGen.single hstep

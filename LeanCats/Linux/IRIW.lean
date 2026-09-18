@@ -111,7 +111,79 @@ instance : wellformed.co iriw_evts iriw_co where
       candidateExecution_wf
   }
 
+private lemma marked_self (e : Event) (he : e ∈ lkmm.Marked iriw_evts iriw_test) :
+    (e, e) ∈ SetRel.mkId (lkmm.Marked iriw_evts iriw_test) := by
+  exact ⟨rfl, he⟩
+
+private lemma marked_of_once {e : Event} (he : e ∈ lkmm.ONCE iriw_evts iriw_test) :
+    e ∈ lkmm.Marked iriw_evts iriw_test := by
+    sorry
+
+
+private lemma marked_self_of_once {e : Event} (he : e ∈ lkmm.ONCE iriw_evts iriw_test) :
+    (e, e) ∈ SetRel.mkId (lkmm.Marked iriw_evts iriw_test) := by
+  exact marked_self e (marked_of_once he)
+
+private lemma prop_p1rY0_p3rY1 : (p1rY0, p3rY1) ∈ lkmm.prop iriw_evts iriw_test := by
+  refine ⟨p1rY0, ?_, ?_⟩
+  · exact marked_self_of_once (by simp [lkmm.ONCE])
+  · refine ⟨p2wY1, ?_, ?_⟩
+    · left
+      refine ⟨?_, ?_⟩
+      · right
+        exact ⟨initWy, by simp [SetRel.inv, iriw_rf], by simp [iriw_co]⟩
+      · simp [CatRel.Rel.external, CatRel.Rel.internal]
+    · refine ⟨p2wY1, ?_, ?_⟩
+      · right
+        rfl
+      · refine ⟨p2wY1, ?_, ?_⟩
+        · exact marked_self_of_once (by simp [lkmm.ONCE])
+        · refine ⟨p3rY1, ?_, ?_⟩
+          · left
+            exact ⟨by simp [iriw_rf], by simp [CatRel.Rel.external, CatRel.Rel.internal]⟩
+          · exact marked_self_of_once (by simp [lkmm.ONCE])
+
+private lemma prop_p3rX0_p1rX1 : (p3rX0, p1rX1) ∈ lkmm.prop iriw_evts iriw_test := by
+  refine ⟨p3rX0, ?_, ?_⟩
+  · exact marked_self_of_once (by simp [lkmm.ONCE])
+  · refine ⟨p0wX1, ?_, ?_⟩
+    · left
+      refine ⟨?_, ?_⟩
+      · right
+        exact ⟨initWx, by simp [SetRel.inv, iriw_rf], by simp [iriw_co]⟩
+      · simp [CatRel.Rel.external, CatRel.Rel.internal]
+    · refine ⟨p0wX1, ?_, ?_⟩
+      · right
+        rfl
+      · refine ⟨p0wX1, ?_, ?_⟩
+        · exact marked_self_of_once (by simp [lkmm.ONCE])
+        · refine ⟨p1rX1, ?_, ?_⟩
+          · left
+            exact ⟨by simp [iriw_rf], by simp [CatRel.Rel.external, CatRel.Rel.internal]⟩
+          · exact marked_self_of_once (by simp [lkmm.ONCE])
+
+private lemma pb_p1rY0_p3rX0 : (p1rY0, p3rX0) ∈ lkmm.pb iriw_evts iriw_test := by
+  refine ⟨p3rY1, prop_p1rY0_p3rY1, ?_⟩
+  refine ⟨p3rX0, ?_, ?_⟩
+  · simp [lkmm.strong_fence, iriw_mb]
+  · refine ⟨p3rX0, ?_, ?_⟩
+    · right
+      rfl
+    · exact marked_self_of_once (by simp [lkmm.ONCE])
+
+private lemma pb_p3rX0_p1rY0 : (p3rX0, p1rY0) ∈ lkmm.pb iriw_evts iriw_test := by
+  refine ⟨p1rX1, prop_p3rX0_p1rX1, ?_⟩
+  refine ⟨p1rY0, ?_, ?_⟩
+  · simp [lkmm.strong_fence, iriw_mb]
+  · refine ⟨p1rY0, ?_, ?_⟩
+    · right
+      rfl
+    · exact marked_self_of_once (by simp [lkmm.ONCE])
+
 theorem iriw_disallowed : ¬ lkmm.propagation iriw_evts iriw_test := by
-  native_decide
+  intro hprop
+  unfold lkmm.propagation at hprop
+  apply hprop p1rY0
+  exact Relation.TransGen.head pb_p1rY0_p3rX0 (Relation.TransGen.single pb_p3rX0_p1rY0)
 
 end LinuxLitmus

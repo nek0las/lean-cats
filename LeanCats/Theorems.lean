@@ -208,3 +208,12 @@ lemma acyclic_of_rank
     | single h => exact hf _ _ h
     | tail _ h ih => exact Nat.lt_trans ih (hf _ _ h)
   exact Nat.lt_irrefl _ (key a a ha)
+
+lemma SetRel.unionCompLeftRightReduce
+  (r imm : SetRel Event Event)
+  (e₁ e₂ : Event)
+  (h : (e₁, e₂) ∈ imm)
+  : (e₁, e₂) ∈ SetRel.union (r.comp imm) (imm.comp r) :=
+  by
+    simp
+    apply Or.intro_left
