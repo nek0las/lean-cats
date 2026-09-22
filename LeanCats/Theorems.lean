@@ -65,15 +65,6 @@ lemma internalImpliesPoOrPoMinusOne {e₁ e₂ : Event} (evts : Events) :
 --     intro hab
 --     intro hbc
 
-lemma comIsTransitive
-  (evts : Events)
-  [h : IsStrictTotalOrder Event (preCo evts)]
-  : IsTrans Event (com evts) :=
-  by
-    constructor
-    intro x y z
-    sorry
-
 -- TODO(Zhiyang): Why we don't need asym.
 -- class StrictPartialOrder (r : Rel Event Event) extends IsStrictOrder Event r
 
@@ -135,7 +126,7 @@ lemma ayclicMono_trans
     SetRel.Acyclic r₁ := by
   unfold SetRel.Acyclic at *
   intro a ha
-  simp only [SetRel.TransGen, Set.mem_setOf_eq] at *
+  simp only [SetRel.TransGen, Set.mem_ofPred_eq] at *
   apply hacyc a
   exact Relation.TransGen.closed (fun x y h => hsub x y h) a a ha
 
@@ -197,7 +188,7 @@ lemma acyclic_of_rank
     (hf : ∀ a b, (a, b) ∈ r → f a < f b) :
     SetRel.Acyclic r := by
   intro a ha
-  simp only [SetRel.TransGen, Set.mem_setOf_eq] at ha
+  simp only [SetRel.TransGen, Set.mem_ofPred_eq] at ha
   have key : ∀ x y, Relation.TransGen (fun e₁ e₂ => (e₁, e₂) ∈ r) x y → f x < f y := by
     intro x y hxy
     induction hxy with

@@ -6,6 +6,9 @@ import LeanCats.Theorems
 import LeanCats.Basic
 import LeanCats.mipsWeakerThanTSO
 
+-- `sc.cat` intentionally defines `sc.sc`: the file name names the model namespace
+-- and the model itself names its consistency predicate.
+set_option linter.dupNamespace false in
 defcat <"sc.cat">
 
 theorem scvtso

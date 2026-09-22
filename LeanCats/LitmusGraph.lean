@@ -1,4 +1,4 @@
-import ProofWidgets.Component.GraphDisplay
+import ProofWidgets.Component.ForceGraphDisplay
 import ProofWidgets.Component.HtmlDisplay
 import LeanCats.Litmus
 
@@ -6,7 +6,7 @@ import LeanCats.Litmus
 
 This file provides a general-purpose function `executionToGraph` that converts a
 concrete candidate execution into an interactive directed graph using
-ProofWidgets4 `GraphDisplay`.
+ProofWidgets4 `ForceGraphDisplay`.
 
 Each event in the execution becomes a single vertex (keyed by its event id).
 Relations (`po`, `rf`, `co`, `fr`, `rmw`) are iterated and each pair becomes a
@@ -173,7 +173,7 @@ private def edgeAttrs (style : RelationStyle) : Array (String × Lean.Json) :=
   then base.push ("strokeDasharray", Lean.Json.str "5,3")
   else base
 
-/-- Convert a `ConcreteExecution` into ProofWidgets `GraphDisplay` vertices and edges.
+/-- Convert a `ConcreteExecution` into ProofWidgets `ForceGraphDisplay` vertices and edges.
 
 * Each event becomes **one** vertex, identified by `toString event.id`.
 * Every pair `(a, b)` in every relation becomes a directed edge `a → b`
@@ -181,13 +181,13 @@ private def edgeAttrs (style : RelationStyle) : Array (String × Lean.Json) :=
 * Events that appear in multiple relations share the same vertex — they are
   connected directly rather than duplicated. -/
 def executionToGraph (exec : ConcreteExecution)
-    : Array GraphDisplay.Vertex × Array GraphDisplay.Edge := Id.run do
+    : Array ForceGraphDisplay.Vertex × Array ForceGraphDisplay.Edge := Id.run do
   -- Detect the initial-write thread id
   let initThreadId := exec.events.foldl
     (fun acc e => if e.effect.isFirstWrite then e.t_id else acc) 10
 
   -- ── vertices ──────────────────────────────────────────────
-  let mut vertices : Array GraphDisplay.Vertex := #[]
+  let mut vertices : Array ForceGraphDisplay.Vertex := #[]
   for e in exec.events do
     let tLabel := exec.threadName e.t_id
     let eName  := eventDisplayName e exec.locName
@@ -200,7 +200,7 @@ def executionToGraph (exec : ConcreteExecution)
     }
 
   -- ── edges ─────────────────────────────────────────────────
-  let mut edges : Array GraphDisplay.Edge := #[]
+  let mut edges : Array ForceGraphDisplay.Edge := #[]
   let allRelations : Array (RelationStyle × Array (Event × Event)) := #[
     (poStyle,  exec.po),
     (rfStyle,  exec.rf),
@@ -222,8 +222,8 @@ def executionToGraph (exec : ConcreteExecution)
   return (vertices, edges)
 
 /-- Build graph data and render it. -/
-private def toHtmlAux (verts : Array GraphDisplay.Vertex) (edgs : Array GraphDisplay.Edge) : Html :=
-  <GraphDisplay
+private def toHtmlAux (verts : Array ForceGraphDisplay.Vertex) (edgs : Array ForceGraphDisplay.Edge) : Html :=
+  <ForceGraphDisplay
     vertices={verts}
     edges={edgs}
     forces={#[

@@ -1,5 +1,5 @@
 import LeanCats.Data
-import Mathlib.Data.Rel
+import Mathlib.Basic.Rel
 
 namespace CatRel
 open Data

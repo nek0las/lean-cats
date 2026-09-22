@@ -22,7 +22,7 @@ by
   simp
   . apply ayclicMono_trans htso
     intro a b h
-    simp [CatRel.CatUnion.union, Set.mem_setOf_eq] at h
+    simp [CatRel.CatUnion.union] at h
     let rtso : SetRel Data.Event Data.Event :=
       CatRel.CatUnion.union (tsox.implied evts X)
         (CatRel.CatUnion.union (tsox.xppo evts X)

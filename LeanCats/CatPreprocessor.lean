@@ -6,11 +6,11 @@ namespace String
 def foldl2Aux {α : Type u} (f : α → Char → Char → α) (s : String) (stopPos : Pos.Raw) (i : Pos.Raw) (a : α) : α :=
   if h : i.byteIdx < stopPos.byteIdx then
     have := Nat.sub_lt_sub_left h (String.Pos.Raw.byteIdx_lt_byteIdx_next s i)
-    let nextIdx := Pos.Raw.next s i
+    let nextIdx := String.Pos.Raw.next s i
     match Pos.Raw.get? s nextIdx with
       | none => a
-      | some next =>
-        foldl2Aux f s stopPos nextIdx (f a (Pos.Raw.get s i) next)
+      | some nextChar =>
+        foldl2Aux f s stopPos nextIdx (f a (Pos.Raw.get s i) nextChar)
   else a
 termination_by stopPos.byteIdx - i.byteIdx
 
