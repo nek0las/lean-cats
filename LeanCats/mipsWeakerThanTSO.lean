@@ -49,14 +49,18 @@ by
         have hsyncInF : X.SYNC' ⊆ X.evts.F := by
           exact X.syncInF
         have hmidF : mid ∈ X.evts.F := hsyncInF hmidSYNC
-        have himplied_ab : (a, b) ∈ tsox.implied evts X := by
+        have himplied_amid : (a, mid) ∈ tsox.implied evts X := by
           unfold tsox.implied
-          simp
-
-
-        have hstep : (a, b) ∈ rtso := by
-          exact Or.inl himplied_ab
-        exact Relation.TransGen.single hstep
+          simp [CatRel.CatUnion.union]
+          refine Or.inl ⟨mid, hpo_amid, ?_⟩
+          exact ⟨rfl, Or.inr hmidF⟩
+        have himplied_midb : (mid, b) ∈ tsox.implied evts X := by
+          unfold tsox.implied
+          simp [CatRel.CatUnion.union]
+          refine Or.inr ⟨mid, ⟨rfl, Or.inr hmidF⟩, hpo_midb⟩
+        have hstep_amid : (a, mid) ∈ rtso := Or.inl himplied_amid
+        have hstep_midb : (mid, b) ∈ rtso := Or.inl himplied_midb
+        exact Relation.TransGen.head hstep_amid (Relation.TransGen.single hstep_midb)
     · rcases h with hrfe | h
       · have hstep : (a, b) ∈ rtso := by
           exact Or.inr (Or.inr (Or.inl hrfe))

@@ -20,15 +20,11 @@ by
   simp [CatRel.CatUnion.union] at *
   intro a b h
   rcases h with hImplied | h
-  · rcases hImplied with ⟨mid, hpo_amid, htail⟩
-    rcases htail with hId | hComp
-    · have hmid_eq_b : mid = b := hId.1
-      subst hmid_eq_b
-      exact Or.inl hpo_amid
-    · rcases hComp with ⟨x, hIdMidX, hpo_xb⟩
-      have hmid_eq_x : mid = x := hIdMidX.1
-      subst hmid_eq_x
-      exact Or.inl (X.prePo _ _ _ hpo_amid hpo_xb)
+  · rcases hImplied with ⟨mid, hpo, hId⟩ | ⟨mid, hId, hpo⟩
+    · rcases hId with ⟨rfl, _⟩
+      exact Or.inl hpo
+    · rcases hId with ⟨rfl, _⟩
+      exact Or.inl hpo
   · rcases h with hxppo | h
     · exact Or.inl hxppo.2
     · rcases h with hrfe | h

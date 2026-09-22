@@ -121,8 +121,9 @@ instance (evts : Events) : IsStrictOrder Event (rf evts) where
 
     exact ⟨lIn, rIn, lWrite, rRead, sameTarget⟩
 
-theorem rfIsTransitive {evts : Events} : Transitive (rf evts) :=
+theorem rfIsTransitive {evts : Events} : IsTrans Event (rf evts) :=
   by
+    constructor
     intro a b c rab rbc
     obtain ⟨lInab, rInab, lWriteab, rReadab, sameTargetab⟩ := rab
     obtain ⟨lInbc, rInbc, lWritebc, rReadbc, sameTargetbc⟩ := rbc

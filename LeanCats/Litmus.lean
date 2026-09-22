@@ -4,13 +4,13 @@ import LeanCats.Data
 open Data
 namespace Litmus
 
-instance instWellformedPo (evts : Data.Events) : wellformed.po evts.po := by
+theorem instWellformedPo (evts : Data.Events) : wellformed.po evts.po := by
   intro x y z hxy hyz
   rcases hxy with ⟨hx, hy, hxyTid, hxyLt⟩
   rcases hyz with ⟨_, hz, hyzTid, hyzLt⟩
   exact ⟨hx, hz, Eq.trans hxyTid hyzTid, Nat.lt_trans hxyLt hyzLt⟩
 
-instance instWellformedRmwEmpty (evts : Data.Events) : wellformed.rmw evts (∅ : SetRel Event Event) := by
+theorem instWellformedRmwEmpty (evts : Data.Events) : wellformed.rmw evts (∅ : SetRel Event Event) := by
   intro e h
   exact False.elim h
 -- X86 SB
@@ -91,8 +91,7 @@ instance : wellformed.co evtsInput co where
       simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Prod.mk.injEq] at h1 h2
       rcases h1 with ⟨hw1, hr1⟩ | ⟨hw1, hr1⟩ <;>
       rcases h2 with ⟨hw2, hr2⟩ | ⟨hw2, hr2⟩ <;>
-      subst hw1 hw2 <;>
-      first | rfl | exact absurd (hr1 ▸ hr2) (Data.Event.ne_of_id_ne (by decide))
+      subst_vars <;> simp_all
   }
   co' := co
   rmw' := ∅
@@ -205,8 +204,7 @@ instance : wellformed.co mp_evts mp_co where
       simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Prod.mk.injEq] at h1 h2
       rcases h1 with ⟨hw1, hr1⟩ | ⟨hw1, hr1⟩ <;>
       rcases h2 with ⟨hw2, hr2⟩ | ⟨hw2, hr2⟩ <;>
-      subst hw1 hw2 <;>
-      first | rfl | exact absurd (hr1 ▸ hr2) (Data.Event.ne_of_id_ne (by decide))
+      subst_vars <;> simp_all
   }
   co'       := mp_co
   rmw'      := ∅
@@ -318,8 +316,7 @@ instance : wellformed.co lb_evts lb_co where
       simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Prod.mk.injEq] at h1 h2
       rcases h1 with ⟨hw1, hr1⟩ | ⟨hw1, hr1⟩ <;>
       rcases h2 with ⟨hw2, hr2⟩ | ⟨hw2, hr2⟩ <;>
-      subst hw1 hw2 <;>
-      first | rfl | exact absurd (hr1 ▸ hr2) (Data.Event.ne_of_id_ne (by decide))
+      subst_vars <;> simp_all
   }
   co'       := lb_co
   rmw'      := ∅

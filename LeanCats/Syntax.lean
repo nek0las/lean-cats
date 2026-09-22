@@ -102,14 +102,17 @@ syntax predefined_relations ("-" cat_ident_part)+ : cat_ident
 
 syntax dsl_term:51 : expr
 
-syntax:51 expr:51 "|" expr:50 : expr
+syntax:51 expr:51 "|" expr:50 : expr       -- right-associative union
+-- Example: a | b | c parses as a | (b | c).
 syntax "~" expr : expr
-syntax expr "&" expr : expr
-syntax:61 expr:61 ";" expr:60 : expr
-syntax expr "\\" expr : expr
-syntax:60 expr:60 "*" expr:61 : expr
-syntax:70 expr "*" : expr -- Reflexive Transitive Closure.
-syntax:70 expr "+" : expr -- Transitive Closure.
+syntax expr "&" expr : expr                -- intersection
+syntax:61 expr:61 ";" expr:60 : expr       -- right-associative composition
+-- Example: a ; b ; c parses as a ; (b ; c).
+syntax expr "\\" expr : expr               -- set difference
+syntax:60 expr:60 "*" expr:61 : expr       -- Cartesian product
+-- Example: a * b * c parses as (a * b) * c.
+syntax:70 expr "*" : expr                  -- Reflexive-transitive closure
+syntax:70 expr "+" : expr                  -- Transitive closure
 syntax expr "^" expr : expr
 syntax expr "+" expr : expr
 syntax expr "?" : expr

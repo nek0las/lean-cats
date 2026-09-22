@@ -6,7 +6,7 @@ import LeanCats.Theorems
 open Data
 namespace LinuxLitmus
 
-instance instWellformedRmwEmpty (evts : Data.Events) : wellformed.rmw evts (∅ : SetRel Event Event) := by
+theorem instWellformedRmwEmpty (evts : Data.Events) : wellformed.rmw evts (∅ : SetRel Event Event) := by
   intro e h
   contradiction
 
@@ -53,7 +53,7 @@ Outcome: witness uses `r0=1 ∧ r1=0`.
 Chosen rf edges: `p0wX -> p1r0` and `initWx -> p1r1`. -/
 @[simp] def corr_rf : SetRel Event Event := {(p0wX, p1r0), (initWx, p1r1)}
 
-@[simp] def corr_rfInst : wellformed.rf corr_evts corr_rf :=
+@[simp] theorem corr_rfInst : wellformed.rf corr_evts corr_rf :=
   Data.wellformed.rf.mk
     (by
       candidateExecution_wf
@@ -105,6 +105,7 @@ theorem corr_FindCycle : ¬ (lkmm.coherence corr_evts corr_test) := by
     exact ⟨by simp [corr_test, corr_po], by simp⟩
   have hcycle : Relation.TransGen (fun x y => (x, y) ∈ rel) p1r1 p1r1 :=
     .head hfr (.head hrf1 (.single hpo))
-  exact hacyc p1r1 (by simpa [rel, lkmm.coherence] using hcycle)
+  exact hacyc p1r1 (by
+    simpa [rel, lkmm.coherence, po_loc, CatRel.CatUnion.union, CatRel.SetRel.union] using hcycle)
 
 end LinuxLitmus

@@ -1,4 +1,4 @@
-import Mathlib.Data.Rel
+import Mathlib.Basic.Rel
 
 namespace Data
 

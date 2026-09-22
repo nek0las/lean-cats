@@ -68,9 +68,9 @@ lemma internalImpliesPoOrPoMinusOne {e₁ e₂ : Event} (evts : Events) :
 lemma comIsTransitive
   (evts : Events)
   [h : IsStrictTotalOrder Event (preCo evts)]
-  : Transitive (com evts) :=
+  : IsTrans Event (com evts) :=
   by
-    unfold Transitive
+    constructor
     intro x y z
     sorry
 
@@ -86,10 +86,6 @@ lemma strictPartialOrderImpliesAcyclic
     {
       apply hr.irrefl
     }
-    {
-      unfold Transitive
-      apply hr.trans
-    }
 
 lemma AcyclicImpliesIrreflexive
   {r : Rel Event Event}
@@ -100,9 +96,9 @@ lemma AcyclicImpliesIrreflexive
     intro e hre
     exact hnt e (TransGen.single hre)
 
-instance
+theorem strictOrderOfTransitiveAcyclic
   {r : Rel Event Event}
-  (ht : Transitive r)
+  (ht : IsTrans Event r)
   (hnt : ∀e, ¬TransGen r e e)
   : IsStrictOrder Event r where
   irrefl := by
@@ -110,7 +106,7 @@ instance
     apply hnt e
     exact (TransGen.single hre)
   trans := by
-    apply ht
+    exact ht.trans
 
 @[simp, aesop safe apply]
 lemma ayclicMono
@@ -141,7 +137,7 @@ lemma ayclicMono_trans
   intro a ha
   simp only [SetRel.TransGen, Set.mem_setOf_eq] at *
   apply hacyc a
-  exact Relation.TransGen.closed (fun x y h => hsub x y h) ha
+  exact Relation.TransGen.closed (fun x y h => hsub x y h) a a ha
 
 --- tso : Relation.TransGen
 ---   (Rel.po evts ∩ (prod W W ∪ prod R (R ∪ W)) ∪ union (external evts ∪ Rel.rf evts) (co evts ∪ Rel.fr evts co)) x x
@@ -208,12 +204,3 @@ lemma acyclic_of_rank
     | single h => exact hf _ _ h
     | tail _ h ih => exact Nat.lt_trans ih (hf _ _ h)
   exact Nat.lt_irrefl _ (key a a ha)
-
-lemma SetRel.unionCompLeftRightReduce
-  (r imm : SetRel Event Event)
-  (e₁ e₂ : Event)
-  (h : (e₁, e₂) ∈ imm)
-  : (e₁, e₂) ∈ SetRel.union (r.comp imm) (imm.comp r) :=
-  by
-    simp
-    apply Or.intro_left
