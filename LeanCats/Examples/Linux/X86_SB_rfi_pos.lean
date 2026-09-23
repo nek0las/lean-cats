@@ -1,7 +1,7 @@
 import LeanCats.Basic
 import LeanCats.Data
-import LeanCats.Macro
-import LeanCats.ModelReader
+import LeanCats.CatParser.Macro
+import LeanCats.CatParser.ModelReader
 import LeanCats.Data
 import LeanCats.Relations
 import LeanCats.Theorems

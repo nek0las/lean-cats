@@ -1,10 +1,9 @@
-import LeanCats.Syntax
+import LeanCats.CatParser.Syntax
 import Lean
 import LeanCats.Relations
 import LeanCats.Data
 import LeanCats.Basic
 import Std.Data.HashMap
-import LeanCats.HashMapExt
 
 open Lean Elab Command Term Meta
 open Data
@@ -50,6 +49,12 @@ instance : Coe (TSyntax `predefined_events) (TSyntax `expr) where
 
 instance : Coe (TSyntax `predefined_relations) (TSyntax `expr) where
   coe s := mkNode `expr #[s]
+
+/-- Recover the CAT text attached to parsed syntax before it becomes a Lean predicate. -/
+private def catSource (stx : Syntax) : MacroM String := do
+  match stx.reprint with
+  | some source => return source.trimAscii.toString
+  | none => Macro.throwError "cannot reconstruct CAT source from generated syntax"
 
 -- Set α -> Set (α × α)
 def SetRel.mkId (s : Set Event) : SetRel Event Event :=
@@ -255,18 +260,41 @@ macro_rules
   -- We just ignore the include inst.
   | `([inst| include $_filename:str , $_ , $_, $_]) => return mkNullNode
 
-  | `([inst| let $nm:cat_ident = $e, $evts, $X, $arg]) =>
-    `(@[simp] def $nm := [expr|$e, $evts, $X, $arg])
+  | `([inst| let $nm:cat_ident = $e, $evts, $X, $arg]) => do
+    -- Evaluation turns CAT sets and relations into predicates, which no longer
+    -- retain their source-level structure.  Keep the original expression next
+    -- to every generated declaration for `#print_cat`.
+    let exprSource ← catSource e.raw
+    let prettyName := mkIdent (Name.str (catIdentToName nm.raw) "cat")
+    let prettyDef ← `(def $prettyName : String := $(quote exprSource))
+    let valueDef ← `(@[simp] def $nm := [expr|$e, $evts, $X, $arg])
+    return mkNullNode #[valueDef, prettyDef]
 
   | `([inst| let $nm:cat_ident ( $arg:cat_ident ) = $e:expr, $evts, $X, $_]) => do
     -- This is where we use the real arg.
-    `(@[simp] def $nm ($arg:ident : SetRel Event Event) := [expr| $e, $evts, $X, $arg])
+    let exprSource ← catSource e.raw
+    let prettyName := mkIdent (Name.str (catIdentToName nm.raw) "cat")
+    let prettyDef ← `(def $prettyName : String := $(quote exprSource))
+    let valueDef ← `(@[simp] def $nm ($arg:ident : SetRel Event Event) := [expr| $e, $evts, $X, $arg])
+    return mkNullNode #[valueDef, prettyDef]
 
   | `([inst| $a:assertion $e as $nm:cat_ident, $evts, $X, $arg]) => do
-    `(@[simp] def $nm := ([assertion| $a] ([expr| $e, $evts, $X, $arg])))
+    let assertionSource ← catSource a.raw
+    let exprSource ← catSource e.raw
+    let source := s!"{assertionSource} {exprSource}"
+    let prettyName := mkIdent (Name.str (catIdentToName nm.raw) "cat")
+    let prettyDef ← `(def $prettyName : String := $(quote source))
+    let valueDef ← `(@[simp] def $nm := ([assertion| $a] ([expr| $e, $evts, $X, $arg])))
+    return mkNullNode #[valueDef, prettyDef]
 
   | `([inst| ~$a:assertion $e as $nm:cat_ident, $evts, $X, $arg]) => do
-    `(@[simp] def $nm := [assertion| $a] (¬[expr| $e, $evts, $X, $arg]))
+    let assertionSource ← catSource a.raw
+    let exprSource ← catSource e.raw
+    let source := s!"~{assertionSource} {exprSource}"
+    let prettyName := mkIdent (Name.str (catIdentToName nm.raw) "cat")
+    let prettyDef ← `(def $prettyName : String := $(quote source))
+    let valueDef ← `(@[simp] def $nm := [assertion| $a] (¬[expr| $e, $evts, $X, $arg]))
+    return mkNullNode #[valueDef, prettyDef]
 
   | `([inst| enum $nm:cat_ident = $[ $tags:cat_ident ]||*, $_, $_, $_]) => do
     let nmIdent : TSyntax `ident := nm
@@ -336,6 +364,12 @@ def elabCatInst : CommandElab := fun stx => do
 macro_rules
   -- Create the model.
   | `([model| $n:ident $xs:inst*]) => do
+    -- Store the parsed instructions in source order. Once expanded into sets and
+    -- predicates, their operators and declaration names cannot be recovered.
+    let lines ← xs.mapM (fun inst => catSource inst.raw)
+    let modelSource := if lines.isEmpty then "" else String.intercalate "\n" lines.toList ++ "\n"
+    let sourceName := mkIdent `cat
+    let sourceDef ← `(def $sourceName : String := $(quote modelSource))
     let nstart <- `(namespace $n)
     let placeHolder := mkIdent `__
     let evts := mkIdent `evts
@@ -345,144 +379,5 @@ macro_rules
     let insts <- xs.mapM (fun ins => `([inst| $ins, $evts, $X, $placeHolder]))
 
     -- let insts : Array (TSyntax `command) := #[]
-    let ret := #[nstart] ++ #[vars] ++ insts ++ #[nend]
+    let ret := #[nstart, sourceDef, vars] ++ insts ++ #[nend]
     return mkNullNode ret
-
-@[simp] def domain (evts : Events) (_ : CandidateExecution evts) (r : SetRel Event Event) := SetRel.dom r
-
-@[simp] def range (evts : Events) (_ : CandidateExecution evts) (r : SetRel Event Event) := SetRel.cod r
-
-@[simp] def po_loc (evts : Events) (X : CandidateExecution evts) := X.po' ∩ CatRel.Rel.location
-
-@[simp] def fre (evts : Events) (X : CandidateExecution evts) := X.fr' ∩ CatRel.Rel.external
-
-@[simp] def fri (evts : Events) (X : CandidateExecution evts) := X.fr' ∩ CatRel.Rel.internal
-
-@[simp] def rfe (evts : Events) (X : CandidateExecution evts) := X.rf' ∩ CatRel.Rel.external
-
-@[simp] def rfi (evts : Events) (X : CandidateExecution evts) := X.rf' ∩ CatRel.Rel.internal
-
-@[simp] def coe (evts : Events) (X : CandidateExecution evts) := X.co' ∩ CatRel.Rel.external
-
-@[simp] def coi (evts : Events) (X : CandidateExecution evts) := X.co' ∩ CatRel.Rel.internal
-
-@[simp] def int (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.internal
-
-@[simp] def ext (evts : Events) (_ : CandidateExecution evts) := CatRel.Rel.external
-
-[model| lkmm
-
-enum Accesses = ONCE' ||
-  RELEASE'  ||
-  ACQUIRE'  ||
-  NORETURN'  ||
-  MB'
-instructions {R, W, RMW}[Accesses]
-
-enum Barriers = wmb'  ||
-  rmb'  ||
-  barrier'
-
-instructions {F}[Barriers]
-
-let FailedRMW = RMW \ (domain(rmw) | range(rmw))
-let Acquire = ACQUIRE \ W \ FailedRMW
-let Release = RELEASE \ R \ FailedRMW
-let Mb = MB \ FailedRMW
-let Noreturn = NORETURN \ W
-
-let Marked = (~M) | IW | ONCE | RELEASE | ACQUIRE | MB | RMW
-
-let Plain = M \ Marked
-
-let strong_fence = mb
-
--- Acquire-Release
-let acq_po = [Acquire] ; po ; [M]
-let po_rel = [M] ; po ; [Release]
-
--- SCPV
-let com = rf | co | fr
-acyclic po_loc | com as coherence
-
--- Atomic Read-Modify-Write
-empty rmw & (fre ; coe) as atomic
-
--- Preserved Program Order
-let dep = addr | data
-let rwdep = (dep | ctrl) ; [W]
-let overwrite = co | fr
-let to_w = rwdep | (overwrite & int) | (addr ; [Plain] ; wmb)
-let to_r = addr | (dep ; [Marked] ; rfi)
-let ppo = to_r | to_w | fence
-
-let A_cumul(r) = (rfe ; [Marked])? ; r
-
-let a = A_cumul(po_rel)
-
-let cumul_fence = [Marked] ; (A_cumul(strong_fence | po_rel) | wmb) ; [Marked]
-let prop = [Marked] ; (overwrite & ext)? ; cumul_fence* ; [Marked] ; (rfe)? ; [Marked]
-
--- Happends Before Relation
-let hb = [Marked] ; (ppo | rfe | ((prop \ id) & int)) ; [Marked]
-
-acyclic hb as happens_before
-
--- Propagation Before Relation
-let pb = prop ; strong_fence ; hb* ; [Marked]
-acyclic pb as propagation
-]
-
-#reduce lkmm.ACQUIRE
-#reduce lkmm.coherence
-#reduce lkmm.atomic
-#reduce lkmm.happens_before
-#reduce lkmm.propagation
-
-[model| tso_x86
-
-let xppo = ((W*W) | (R*W) | (R*R)) & po
-let At = domain(rmw) | range(rmw)
-let implied = po;[At | F] | [At | F];po
-acyclic (implied | xppo | rfe | fr | co) as tso
-]
-
-[model| bpf
-let po_amo_fetch = ([M];po;RMW) | (RMW;po;[M])
-
-let load_acquire = ([lkmm.ACQUIRE];po;[M])
-let store_release = ([M];po;[lkmm.RELEASE])
-let rcpc = load_acquire | store_release
-
-let addr_dep = [R];addr;[M]
-let data_dep = [R];data;[W]
-let ctrl_dep = [R];ctrl;[W]
-
-let com = co | rf | fr
-
-let ppo =
- po_amo_fetch | rcpc
-| addr_dep
-| data_dep
-| ctrl_dep
-| [M];(addr|data);[W];rfi;[R]
-| [M];addr;[M];po;[W]
-| (coi | fri)
-
-let A-cumul = (rfe)? ; (po_amo_fetch | store_release)
-let prop = (coe | fre)? ; A-cumul* ; (rfe)?
-
-acyclic com | po-loc as Coherence
-
-let hb = ppo | rfe | ((prop \ id) & int)
-
-acyclic hb as Happens-before
-
-let pb = prop ; po_amo_fetch ; hb*
-
--- acyclic pb as Propagation
-
--- empty rmw & (fre;coe) as Atomic
-
--- acyclic po_amo_fetch | com as fetch_fence
-]

@@ -1,15 +1,17 @@
-import LeanCats.Macro
-import LeanCats.ModelReader
+import LeanCats.CatParser.Macro
+import LeanCats.CatParser.ModelReader
 import LeanCats.Data
 import LeanCats.Relations
 import LeanCats.Theorems
 import LeanCats.Basic
-import LeanCats.mipsWeakerThanTSO
+import LeanCats.PrettyPrint
+import LeanCats.Examples.mipsWeakerThanTSO
 
--- `sc.cat` intentionally defines `sc.sc`: the file name names the model namespace
--- and the model itself names its consistency predicate.
-set_option linter.dupNamespace false in
 defcat <"sc.cat">
+
+#print_cat sc
+
+#check sc.sc
 
 theorem scvtso
   (evts : Data.Events)

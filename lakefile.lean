@@ -11,10 +11,4 @@ lean_lib «LeanCats» where
 lean_exe "lean-cats" where
   root := `Main
 
-lean_exe "litmus-parser-test" where
-  root := `LeanCats.LitmusParserTest
-
-lean_lib «LeanCatsReaderTest» where
-  roots := #[`LeanCats.LitmusReaderTest]
-
 require "leanprover-community" / "mathlib"

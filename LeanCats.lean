@@ -1,17 +1,13 @@
 -- This module serves as the root of the `LeanCats` library.
 -- Import modules here that should be built as part of the library.
 import LeanCats.Data
-import LeanCats.HashMapExt
 import LeanCats.Relations
 import LeanCats.Basic
-import LeanCats.Syntax
-import LeanCats.CatPreprocessor
-import LeanCats.Macro
+import LeanCats.CatParser.Syntax
+import LeanCats.CatParser.CatPreprocessor
+import LeanCats.CatParser.Macro
 import LeanCats.Theorems
-import LeanCats.TsoWeakerThanSc
-import LeanCats.mipsWeakerThanTSO
-import LeanCats.ModelReader
-import LeanCats.LitmusParser
-import LeanCats.LitmusGraph
-import LeanCats.LitmusGraphBridge
-import LeanCats.LitmusReader
+import LeanCats.Examples.TsoWeakerThanSc
+import LeanCats.Examples.mipsWeakerThanTSO
+import LeanCats.CatParser.ModelReader
+import LeanCats.PrettyPrint

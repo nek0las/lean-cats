@@ -1,12 +1,12 @@
 import LeanCats.Basic
 import LeanCats.Data
-import LeanCats.Macro
-import LeanCats.ModelReader
+import LeanCats.CatParser.Macro
+import LeanCats.CatParser.ModelReader
 import LeanCats.Data
 import LeanCats.Relations
 import LeanCats.Theorems
 import LeanCats.Basic
-import LeanCats.mipsWeakerThanTSO
+import LeanCats.Examples.mipsWeakerThanTSO
 
 -- In this litmus test, we want to show that sometimes the X86 is weaker than mips because of the sc-per-location.
 -- init x = 0, y = 0

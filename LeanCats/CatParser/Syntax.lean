@@ -17,13 +17,16 @@ declare_syntax_cat predefined_relations
 declare_syntax_cat cat_ident_part
 declare_syntax_cat cat_ident
 declare_syntax_cat procedure_call
+declare_syntax_cat arch_spec
 
 syntax reserved:41 : expr
 syntax primitive : reserved
 syntax keyword : reserved
+syntax arch_spec : reserved
 syntax name : reserved
 syntax predefined_events : reserved
 syntax predefined_relations : reserved
+syntax arch_spec : reserved
 
 syntax "and" : keyword
 syntax "as" : keyword
@@ -43,6 +46,10 @@ syntax "procedure" : keyword
 syntax "rec" : keyword
 syntax "scopes" : keyword
 syntax "with" : keyword
+
+-- Supported Architectures.
+syntax "MIPS" : arch_spec
+syntax "C" : arch_spec
 
 syntax "classes" : primitive
 syntax "linearizations" : primitive

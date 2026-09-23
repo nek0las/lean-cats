@@ -1,7 +1,7 @@
 import Lean
-import LeanCats.Macro
-import LeanCats.Syntax
-import LeanCats.CatPreprocessor
+import LeanCats.CatParser.Macro
+import LeanCats.CatParser.Syntax
+import LeanCats.CatParser.CatPreprocessor
 
 open Lean.Meta Lean Expr Elab Command Parser
 

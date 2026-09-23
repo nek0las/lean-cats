@@ -12,7 +12,6 @@ deriving Inhabited, BEq, Repr, DecidableEq
 structure Effect : Type where
   op : Op
   location : Nat
-  -- For read, the value can not be determined at the begining.
   value : Option Nat
   isFirstWrite : Bool
   isFinalWrite : Bool

@@ -1,6 +1,6 @@
 import LeanCats.Basic
 import LeanCats.Data
-import LeanCats.Macro
+import LeanCats.CatParser.Macro
 import LeanCats.Theorems
 
 open Data

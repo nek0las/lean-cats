@@ -41,6 +41,21 @@ defcat <"sc.cat">
 defcat <"tso.cat">
 ```
 
+### Reconstructing a CAT model
+
+Import `LeanCats.PrettyPrint` alongside the module that defines a model. The
+generated `model.cat` string contains its parsed CAT instructions in order.
+Comments removed by `defcat`'s preprocessor are not retained.
+
+```lean
+import LeanCats.PrettyPrint
+import LeanCats.Examples.mipsWeakerThanTSO
+
+#print_cat tsox             -- print the complete model
+#print_cat tsox.tso         -- print one generated assertion's expression
+#write_cat tsox "tsox.cat"  -- write the complete model to a .cat file
+```
+
 ## Where to look
 
 - `LeanCats/Macro.lean`: CAT DSL (`[model| ... ]`).
