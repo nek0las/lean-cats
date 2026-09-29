@@ -1,0 +1,19 @@
+MIPS
+
+include "mipsfences.cat"
+include "cos.cat"
+
+(* Uniproc check *)
+let com = rf | fr | co
+acyclic po-loc | com as uniproc
+
+(* Atomic *)
+empty rmw & (fre;coe) as atomic
+
+(* ppo, choosing pso at the moment *)
+let ppo = po & (R * M) | sync
+
+
+let ghb = ppo | rfe | fr | co
+
+acyclic ghb as pso
