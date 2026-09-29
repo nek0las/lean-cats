@@ -5,12 +5,15 @@ import LeanCats.Relations
 import LeanCats.Data
 import LeanCats.Basic
 import Std.Data.HashMap
-
 -- Import the definitions of the architectures.
 import LeanCats.ArchSem.mips
+import LeanCats.ArchSem.riscv
 
 open Lean Elab Command Term Meta
 open Data
+
+-- Some cat definitions containt the duplicated name e.g. RISCV.
+set_option linter.dupNamespace false
 
 open scoped CatSyntax
 
@@ -263,8 +266,20 @@ macro_rules
     let exprSource ← catSource e.raw
     let prettyName := mkIdent (Name.str (catIdentToName nm.raw) "cat")
     let prettyDef ← `(def $prettyName : String := $(quote exprSource))
+    let argName := mkIdent (Name.str (catIdentToName nm.raw) "catArg")
+    let argDef ← `(def $argName : String := $(quote arg.getId.toString))
     let valueDef ← `(@[simp] def $nm ($arg:ident : SetRel Event Event) := [expr| $e, $evts, $X, $arg])
-    return mkNullNode #[valueDef, prettyDef]
+    return mkNullNode #[valueDef, prettyDef, argDef]
+
+  | `([inst| let $nm:cat_ident ( $arg:cat_ident ) = $e:expr in $body:expr, $evts, $X, $_]) => do
+    -- This is where we use the real arg.
+    let exprSource ← catSource e.raw
+    let prettyName := mkIdent (Name.str (catIdentToName nm.raw) "cat")
+    let prettyDef ← `(def $prettyName : String := $(quote exprSource))
+    let argName := mkIdent (Name.str (catIdentToName nm.raw) "catArg")
+    let argDef ← `(def $argName : String := $(quote arg.getId.toString))
+    let valueDef ← `(@[simp] def $nm ($arg:ident : SetRel Event Event) := [expr| $e, $evts, $X, $arg])
+    return mkNullNode #[valueDef, prettyDef, argDef]
 
   | `([inst| $a:assertion $e as $nm:cat_ident, $evts, $X, $arg]) => do
     let assertionSource ← catSource a.raw
@@ -304,6 +319,16 @@ macro_rules
     return mkNullNode #[]
 
   | `([inst| $e:arch_spec, $_, $_, $_]) => do
+    let some source := e.raw.reprint
+      | Macro.throwError "architecture name has no source text"
+    let name := mkIdent source.trimAscii.toString.toLower.toName
+    let decl ← `(Lean.Parser.Command.openDecl| $name:ident)
+    `(
+      open $decl:openDecl
+    )
+
+  | `([inst| $e:arch_spec $_comments:str, $_, $_, $_]) => do
+    -- Just ignore the comments for now.
     let some source := e.raw.reprint
       | Macro.throwError "architecture name has no source text"
     let name := mkIdent source.trimAscii.toString.toLower.toName

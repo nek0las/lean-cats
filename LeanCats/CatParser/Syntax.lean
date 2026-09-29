@@ -130,9 +130,11 @@ scoped syntax "try" expr "with" expr : expr
 scoped syntax assertion expr ("as" cat_ident)? : inst
 -- The flag is used to witness the assertion, so it doesn't change the states of the execution, we could just ignore it.
 scoped syntax "flag" assertion expr "as" expr : inst
+scoped syntax "enum" cat_ident "=" sepBy(cat_ident, "||") : inst
 scoped syntax "let" cat_ident "=" expr : inst
 scoped syntax "let" cat_ident "(" cat_ident,* ")" "=" expr : inst
-scoped syntax "enum" cat_ident "=" sepBy(cat_ident, "||") : inst
+scoped syntax "let" cat_ident "=" expr "in" expr : inst
+scoped syntax "let" cat_ident "(" cat_ident,* ")" "=" expr "in" expr : inst
 -- event class can be R W F B RMW or a custom name like SRCU
 scoped syntax "instructions" "{" annotable_events,+ "}" "[" expr "]" : inst
 
@@ -140,7 +142,7 @@ scoped syntax "(*" ident* "*)" : inst
 scoped syntax "include" str : inst
 
 -- Supported Architectures.
-scoped syntax arch_spec : inst
+scoped syntax arch_spec str* : inst
 scoped syntax "MIPS" : arch_spec
 scoped syntax "C" : arch_spec
 
