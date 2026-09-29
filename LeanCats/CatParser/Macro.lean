@@ -5,19 +5,13 @@ import LeanCats.Data
 import LeanCats.Basic
 import Std.Data.HashMap
 
+-- Import the definitions of the architectures.
+import LeanCats.ArchSem.mips
+
 open Lean Elab Command Term Meta
 open Data
 
-syntax "[model|" ident inst* "]" : command
-syntax (name := catexpr) "[expr|" expr "," cat_ident "," cat_ident "," cat_ident "]" : term
-syntax "[keyword|" keyword "]" : term
-syntax "[assertion|" assertion "]" : term
-syntax (name := catinst) "[inst|" inst "," cat_ident "," cat_ident "," cat_ident "]" : command
-syntax "[annotable-events|" annotable_events "," cat_ident "," cat_ident "]" : term -- Set
-syntax "[predefined-events|" predefined_events "," cat_ident "," cat_ident "]" : term
-syntax "[reserved|" reserved "," cat_ident "," cat_ident "]" : term
-syntax "[predefined-relations|" predefined_relations "," cat_ident "," cat_ident "]" : term
-syntax "[dsl-term|" dsl_term "," cat_ident "," cat_ident "," cat_ident "]" : term
+open scoped CatSyntax
 
 -- Walk any cat_ident syntax tree, collect all ident leaves, and join with "_".
 -- This handles plain idents, tick-prefixed ('ONCE), and multi-hyphen (rcu-lock, after-unlock-lock).
@@ -190,10 +184,6 @@ macro_rules
     let nm := mkIdent "mb'".toName
     `($X.$nm)
 
-  | `([predefined-relations| SYNC , $_, $X]) =>
-    let nm := mkIdent "SYNC'".toName
-    `($X.$nm)
-
 macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
   | `([keyword| as]) => Lean.Macro.throwUnsupported
@@ -315,6 +305,14 @@ macro_rules
     -- We ignore the flag for now, since it doesn't change the states of the execution, it's just used to witness the assertion.
     return mkNullNode #[]
 
+  | `([inst| $e:arch_spec, $_, $_, $_]) => do
+    let some source := e.raw.reprint
+      | Macro.throwError "architecture name has no source text"
+    let name := mkIdent source.trimAscii.toString.toLower.toName
+    let decl ← `(Lean.Parser.Command.openDecl| $name:ident)
+    `(
+      open $decl:openDecl
+    )
 /--
 Processes `instructions A[EnumType]` by generating a definition for each constructor of `EnumType`.
 Specifically, for each constructor `C` of `EnumType`, we generate:
@@ -326,7 +324,7 @@ we generate:
   `def RELEASE : Set Event := { e | e.tag = Accesses.RELEASE } ∩ R`
   ...
 -/
-@[command_elab catinst]
+@[command_elab CatSyntax.catinst]
 def elabCatInst : CommandElab := fun stx => do
   match stx with
   | `([inst| instructions { $a:annotable_events,* }[ $c:cat_ident ] , $evts:cat_ident , $X:cat_ident, $_:cat_ident]) => do
@@ -381,3 +379,12 @@ macro_rules
     -- let insts : Array (TSyntax `command) := #[]
     let ret := #[nstart, sourceDef, vars] ++ insts ++ #[nend]
     return mkNullNode ret
+
+
+[model| lk MIPS
+  MIPS
+  let a = SYNC
+  let b = po * SYNC
+]
+
+#print lk.b
