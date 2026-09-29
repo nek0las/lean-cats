@@ -1,4 +1,5 @@
 import LeanCats.CatParser.Syntax
+import LeanCats.CatParser.CatPreprocessor
 import Lean
 import LeanCats.Relations
 import LeanCats.Data
@@ -247,9 +248,6 @@ macro_rules
     `([annotable-events| $a, $evts, $X])
 
 macro_rules
-  -- We just ignore the include inst.
-  | `([inst| include $_filename:str , $_ , $_, $_]) => return mkNullNode
-
   | `([inst| let $nm:cat_ident = $e, $evts, $X, $arg]) => do
     -- Evaluation turns CAT sets and relations into predicates, which no longer
     -- retain their source-level structure.  Keep the original expression next
@@ -313,6 +311,46 @@ macro_rules
     `(
       open $decl:openDecl
     )
+
+/-- Parse a CAT file into instructions for `defcat` or `include`. -/
+def parseCatFile (path : String) : CommandElabM (Array (TSyntax `inst)) := do
+  let source ← try
+    IO.FS.readFile path
+  catch _ =>
+    throwError "cannot read CAT file at {path}"
+  let input := "[model| Included\n" ++ removeComments source ++ "\n]"
+  let parsed ← match Lean.Parser.runParserCategory (← getEnv) `command input path with
+    | .ok stx => pure stx
+    | .error message => throwError "cannot parse CAT file {path}: {message}"
+  match parsed with
+  | `([model| Included $xs:inst*]) => pure xs
+  | _ => throwError "cannot parse CAT instructions in {path}"
+
+/-- Read and flatten a CAT library, preserving the order of its instructions. -/
+private partial def readCatInclude (filename : String) (ancestors : List String) :
+    CommandElabM (Array (TSyntax `inst)) := do
+  if filename.isEmpty || filename.contains '/' || filename.contains '\\' ||
+      filename == "." || filename == ".." then
+    throwError "invalid CAT include filename: {filename}"
+  if ancestors.contains filename then
+    throwError "cyclic CAT include: {String.intercalate " -> " (ancestors.reverse ++ [filename])}"
+  let insts ← parseCatFile ("LeanCats/Libs/" ++ filename)
+  let mut result := #[]
+  for inst in insts do
+    match inst with
+    | `(inst| include $nested:str) =>
+      result := result ++ (← readCatInclude nested.getString (filename :: ancestors))
+    | _ => result := result.push inst
+  return result
+
+@[command_elab CatSyntax.catinst]
+def elabCatInclude : CommandElab := fun stx => do
+  match stx with
+  | `([inst| include $filename:str , $_ , $_, $_]) =>
+    let insts ← readCatInclude filename.getString []
+    elabCommand (← `([model| $insts:inst*]))
+  | _ => Lean.Elab.throwUnsupportedSyntax
+
 /--
 Processes `instructions A[EnumType]` by generating a definition for each constructor of `EnumType`.
 Specifically, for each constructor `C` of `EnumType`, we generate:
@@ -361,6 +399,11 @@ def elabCatInst : CommandElab := fun stx => do
 
 macro_rules
   -- Create the model.
+  | `([model| $n:str $xs:inst*]) => do
+    if !n.getString.isEmpty then
+      Macro.throwError "a string model name must be empty; use an identifier for a named model"
+    `([model| $xs:inst*])
+
   | `([model| $n:ident $xs:inst*]) => do
     -- Store the parsed instructions in source order. Once expanded into sets and
     -- predicates, their operators and declaration names cannot be recovered.
@@ -379,6 +422,16 @@ macro_rules
     -- let insts : Array (TSyntax `command) := #[]
     let ret := #[nstart, sourceDef, vars] ++ insts ++ #[nend]
     return mkNullNode ret
+
+  | `([model| $xs:inst*]) => do
+    let placeHolder := mkIdent `__
+    let evts := mkIdent `evts
+    let X := mkIdent `x
+    let vars ← `(variable ($evts : Events) [IsStrictTotalOrder Event (CatRel.preCo $evts)] ($X : CandidateExecution $evts))
+    let insts ← xs.mapM (fun ins => `([inst| $ins, $evts, $X, $placeHolder]))
+    let start ← `(section)
+    let stop ← `(end)
+    return mkNullNode (#[start, vars] ++ insts ++ #[stop])
 
 
 [model| lk MIPS

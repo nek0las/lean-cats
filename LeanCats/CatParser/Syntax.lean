@@ -144,8 +144,9 @@ scoped syntax arch_spec : inst
 scoped syntax "MIPS" : arch_spec
 scoped syntax "C" : arch_spec
 
-
 syntax "[model|" ident inst* "]" : command
+syntax "[model|" str inst* "]" : command
+syntax "[model|" inst* "]" : command
 syntax (name := catexpr) "[expr|" expr "," cat_ident "," cat_ident "," cat_ident "]" : term
 syntax "[keyword|" keyword "]" : term
 syntax "[assertion|" assertion "]" : term
