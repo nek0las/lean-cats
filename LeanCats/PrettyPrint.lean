@@ -25,6 +25,102 @@ macro_rules
     let sourceName := mkIdent (Name.str name.getId "cat")
     `(#eval IO.FS.writeFile $path $sourceName)
 
+private def catNameChar (c : Char) : Bool :=
+  c.isAlphanum || c == '_' || c == '\'' || c == '-' || c == '.'
+
+private def catSource? (env : Environment) (name : Name) : Option String :=
+  match env.find? name with
+  | some (.defnInfo info) =>
+    match info.value with
+    | .lit (.strVal s) => some s
+    | _ => none
+  | _ => none
+
+private partial def substituteCatArg (chars : List Char) (parameter argument : String) : String :=
+  match chars with
+  | [] => ""
+  | c :: rest =>
+    if catNameChar c then
+      let (tail, after) := rest.span catNameChar
+      let token := String.ofList (c :: tail)
+      (if token == parameter then "(" ++ argument ++ ")" else token) ++
+        substituteCatArg after parameter argument
+    else
+      c.toString ++ substituteCatArg rest parameter argument
+
+private partial def takeCatArg (chars : List Char) (depth : Nat := 1)
+    (acc : List Char := []) : Option (String × List Char) :=
+  match chars with
+  | [] => none
+  | c :: rest =>
+    if c == '(' then
+      takeCatArg rest (depth + 1) (c :: acc)
+    else if c == ')' then
+      if depth == 1 then some (String.ofList acc.reverse, rest)
+      else takeCatArg rest (depth - 1) (c :: acc)
+    else
+      takeCatArg rest depth (c :: acc)
+
+private def catBody (source : String) : String :=
+  let source := source.trimAscii.toString
+  if source.startsWith "try " then
+    ((source.drop 4).toString.splitOn " with ").head!
+  else source
+
+private def catWrapped (source : String) : Bool :=
+  let rec check (chars : List Char) (depth : Nat) : Bool :=
+    match chars with
+    | [] => depth == 0
+    | '(' :: rest => check rest (depth + 1)
+    | ')' :: rest =>
+      if depth == 1 then rest.isEmpty
+      else if depth == 0 then false
+      else check rest (depth - 1)
+    | _ :: rest => check rest depth
+  match source.trimAscii.toString.toList with
+  | '(' :: rest => check rest 1
+  | _ => false
+
+private def catParenthesize (source : String) : String :=
+  if catWrapped source then source else "(" ++ source ++ ")"
+
+private partial def expandCatFormula (env : Environment) (ns : Name)
+    (visited : List Name) (chars : List Char) : Lean.Elab.Command.CommandElabM String := do
+  match chars with
+  | [] => return ""
+  | c :: rest =>
+    if !catNameChar c then
+      return c.toString ++ (← expandCatFormula env ns visited rest)
+    let (tail, after) := rest.span catNameChar
+    let token := String.ofList (c :: tail)
+    let decl := Name.str ns (token.replace "-" "_")
+    let some source := catSource? env (Name.str decl "cat")
+      | return token ++ (← expandCatFormula env ns visited after)
+    if visited.contains decl then
+      throwError "cyclic CAT definition while expanding {decl}"
+    let body := catBody source
+    let some parameter := catSource? env (Name.str decl "catArg")
+      | return catParenthesize (← expandCatFormula env ns (decl :: visited) body.toList) ++
+          (← expandCatFormula env ns visited after)
+    let (_, call) := after.span Char.isWhitespace
+    match call with
+    | '(' :: callRest =>
+      let some (argument, remaining) := takeCatArg callRest
+        | throwError "unclosed CAT function call: {token}"
+      let substituted := substituteCatArg body.toList parameter argument
+      return catParenthesize (← expandCatFormula env ns (decl :: visited) substituted.toList) ++
+        (← expandCatFormula env ns visited remaining)
+    | _ => return token ++ (← expandCatFormula env ns visited after)
+
+/-- Print a CAT formula with locally defined aliases recursively expanded. -/
+elab "#print_cat_expanded " name:ident : command => do
+  let decl := name.getId
+  let env ← Lean.getEnv
+  let some source := catSource? env (Name.str decl "cat")
+    | throwError "no CAT formula stored for {decl}"
+  let expanded ← expandCatFormula env decl.getPrefix [decl] (catBody source).toList
+  Lean.logInfo m!"{decl} = {expanded}"
+
 /-- Render the members of `set` which occur in `domain`. -/
 def set (render : α → String) (domain : List α) (set : Set α)
     [DecidablePred set] : String :=
@@ -88,6 +184,9 @@ Examples:
 ```lean
 #print_cat tsox
 -- Print the full `tsox` model in CAT syntax.
+
+#print_cat_expanded mips.pso
+-- Expand CAT definitions used by `mips.pso`, stopping at built-in relations.
 
 #write_cat tsox "tsox.cat"
 -- Write the reconstructed model to a file.
