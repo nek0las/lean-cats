@@ -1,0 +1,3 @@
+(* Fences *)
+let fencerel(r) = (po & (_ * r)) ; po
+let sync = try fencerel(SYNC) with 0
